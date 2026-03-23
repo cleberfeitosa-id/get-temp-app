@@ -46,8 +46,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const currentPath = window.location.pathname;
 
+  // Helper: handles both /page and /page.html (accounts for Vercel cleanUrls)
+  const isPage = (name: string) =>
+    currentPath.endsWith(`/${name}.html`) ||
+    currentPath.endsWith(`/${name}`) ||
+    currentPath === `/${name}`;
+
   // Change Header icon to back arrow if not on index
-  if (!currentPath.endsWith('index.html') && currentPath !== '/') {
+  if (!isPage('index') && currentPath !== '/') {
     const icon = document.getElementById('header-icon');
     if (icon) icon.textContent = 'arrow_back';
   }
@@ -69,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Re-run dynamic script logic if on Dashboard (index.html)
-  if (currentPath.endsWith('index.html') || currentPath === '/') {
+  if (isPage('index') || currentPath === '/') {
     getReadings().then(dataArray => {
         if (!dataArray || dataArray.length === 0) return;
         
@@ -137,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Phase 4 & 5: Dynamic Details Page Logic
-  if (currentPath.includes('detalhes_camara.html')) {
+  if (isPage('detalhes_camara')) {
     const urlParams = new URLSearchParams(window.location.search);
     const deviceId = urlParams.get('id');
 
@@ -197,7 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Phase 5 & 6: Dynamic Analysis Page Logic
-  if (currentPath.includes('analise.html')) {
+  if (isPage('analise')) {
       let globalData: SensorReading[] = [];
       let currentChamber = 'ALL';
       let currentDays = 1;
@@ -364,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Phase 7: Comprehensive Dynamic Reports Export
-  if (currentPath.includes('relatorios.html')) {
+  if (isPage('relatorios')) {
      let selectedFormat = 'CSV';
      let selectedType = 'Resumo Semanal';
      
@@ -527,5 +533,47 @@ document.addEventListener("DOMContentLoaded", () => {
             });
          }
      });
+  }
+
+  // Ajustes page interactive wiring
+  if (isPage('ajustes')) {
+    // Toggle switches: show toast-like feedback on change
+    const toggles = document.querySelectorAll('input[type="checkbox"]');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('change', (e) => {
+        const isChecked = (e.target as HTMLInputElement).checked;
+        const label = (e.target as HTMLElement).closest('div.flex.items-center.justify-between')?.querySelector('h5')?.textContent ?? 'Configuração';
+        const toast = document.createElement('div');
+        toast.textContent = `${label.trim()}: ${isChecked ? 'Ativado ✓' : 'Desativado'}`;
+        toast.style.cssText = `
+          position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
+          background:#191c1e; color:#fff; padding:12px 20px; border-radius:999px;
+          font-size:13px; font-family:Manrope,sans-serif; font-weight:600;
+          z-index:9999; white-space:nowrap; transition:opacity 0.3s;
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+      });
+    });
+
+    // "Nova Câmara" button → navigate to nova_camara
+    const novaCamaraBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Nova Câmara'));
+    if (novaCamaraBtn) {
+      novaCamaraBtn.addEventListener('click', () => { window.location.href = 'nova_camara'; });
+    }
+
+    // "Editar Perfil" button → alert placeholder
+    const editarBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Editar Perfil'));
+    if (editarBtn) {
+      editarBtn.addEventListener('click', () => {
+        alert('Funcionalidade de edição de perfil disponível em breve.');
+      });
+    }
+
+    // "Sair" button → redirect to login
+    const sairBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Sair'));
+    if (sairBtn) {
+      sairBtn.addEventListener('click', () => { window.location.href = 'login'; });
+    }
   }
 });
