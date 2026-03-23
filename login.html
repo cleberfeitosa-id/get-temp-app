@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Get Temp - Login Controle ColdChain</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#301400",
+              "primary-fixed-dim": "#94ccff",
+              "on-tertiary-container": "#7f4000",
+              "on-secondary-container": "#6b4b00",
+              "surface-container-lowest": "#ffffff",
+              "on-primary": "#ffffff",
+              "background": "#f7f9fb",
+              "secondary-container": "#ffb702",
+              "on-primary-container": "#005584",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "on-primary-fixed": "#001d32",
+              "surface-tint": "#006399",
+              "surface-variant": "#e0e3e5",
+              "surface-dim": "#d8dadc",
+              "inverse-on-surface": "#eff1f3",
+              "on-secondary": "#ffffff",
+              "surface-bright": "#f7f9fb",
+              "surface-container-high": "#e6e8ea",
+              "tertiary-fixed": "#ffdcc4",
+              "error-container": "#ffdad6",
+              "inverse-primary": "#94ccff",
+              "on-primary-fixed-variant": "#004b74",
+              "primary": "#006399",
+              "on-tertiary-fixed-variant": "#703800",
+              "on-background": "#191c1e",
+              "outline": "#6f787d",
+              "tertiary-fixed-dim": "#ffb781",
+              "tertiary-container": "#ffb47c",
+              "on-surface": "#191c1e",
+              "tertiary": "#934b00",
+              "surface-container": "#eceef0",
+              "on-tertiary": "#ffffff",
+              "primary-fixed": "#cde5ff",
+              "on-secondary-fixed": "#271900",
+              "on-surface-variant": "#3f484c",
+              "surface": "#f7f9fb",
+              "secondary-fixed-dim": "#ffba27",
+              "secondary-fixed": "#ffdea9",
+              "on-error": "#ffffff",
+              "error": "#ba1a1a",
+              "outline-variant": "#bfc8cd",
+              "surface-container-highest": "#e0e3e5",
+              "on-secondary-fixed-variant": "#5e4100",
+              "on-error-container": "#93000a",
+              "secondary": "#7d5800",
+              "primary-container": "#8fcaff"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .floating-label-input:focus-within label,
+        .floating-label-input input:not(:placeholder-shown) + label {
+            transform: translateY(-1.5rem) scale(0.85);
+            color: #006399;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen flex flex-col overflow-x-hidden">
+<!-- Hero Background Atmospheric Gradient -->
+<div class="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+<div class="absolute -top-[10%] -left-[10%] w-[60%] h-[60%] bg-primary-container/20 rounded-full blur-[120px]"></div>
+<div class="absolute top-[20%] -right-[5%] w-[40%] h-[50%] bg-secondary-container/10 rounded-full blur-[100px]"></div>
+<div class="absolute bottom-0 left-0 w-full h-[40%] bg-gradient-to-t from-sky-100 to-transparent dark:from-sky-900/20 opacity-40"></div>
+</div>
+<!-- Login Container -->
+<main class="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12">
+<!-- Branding Anchor -->
+<div class="text-center mb-16">
+<div class="inline-flex items-center justify-center w-20 h-20 bg-primary rounded-2xl mb-8 shadow-2xl shadow-primary/30">
+<span class="material-symbols-outlined text-on-primary text-4xl" data-icon="thermostat">thermostat</span>
+</div>
+<h1 class="font-headline font-bold text-4xl tracking-tight text-on-background">
+                Get <span class="text-primary">Temp</span>
+</h1>
+<p class="font-body text-on-surface-variant mt-2 tracking-wide text-sm font-medium">ECOSSISTEMA DE MONITORAMENTO DE PRECISÃO</p>
+</div>
+<!-- Login Card -->
+<div class="w-full max-w-md">
+<div class="glass-card rounded-lg shadow-[0_12px_40px_rgba(25,28,30,0.04)] border border-white/40 p-10">
+<div class="mb-10">
+<h2 class="font-headline text-2xl font-semibold text-on-surface">Acesso Seguro</h2>
+<p class="text-on-surface-variant text-sm mt-1">Acesse as métricas da sua unidade de armazenamento</p>
+</div>
+<form action="#" class="space-y-8">
+<!-- Email Field -->
+<div class="relative floating-label-input group">
+<input class="block w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT focus:ring-2 focus:ring-primary/20 transition-all duration-300" id="email" name="email" placeholder=" " required="" type="email"/>
+<label class="absolute left-4 top-4 text-on-surface-variant transition-all duration-300 pointer-events-none origin-left" for="email">
+                            E-mail
+                        </label>
+</div>
+<!-- Password Field -->
+<div class="relative floating-label-input group">
+<input class="block w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT focus:ring-2 focus:ring-primary/20 transition-all duration-300" id="password" name="password" placeholder=" " required="" type="password"/>
+<label class="absolute left-4 top-4 text-on-surface-variant transition-all duration-300 pointer-events-none origin-left" for="password">
+                            Senha
+                        </label>
+<button class="absolute right-4 top-4 text-on-surface-variant hover:text-primary transition-colors" type="button">
+<span class="material-symbols-outlined" data-icon="visibility">visibility</span>
+</button>
+</div>
+<!-- Remember & Logic -->
+<div class="flex items-center justify-between">
+<label class="flex items-center cursor-pointer group">
+<div class="relative">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-10 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</div>
+<span class="ml-3 text-sm font-medium text-on-surface-variant group-hover:text-on-surface transition-colors">Lembrar deste dispositivo</span>
+</label>
+</div>
+<!-- Action Button -->
+<button class="w-full py-4 bg-primary text-on-primary rounded-full font-headline font-bold text-lg shadow-lg shadow-primary/25 hover:opacity-90 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2" type="submit">
+<span>Entrar no Sistema</span>
+<span class="material-symbols-outlined text-xl" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</form>
+<!-- Help Links -->
+<div class="mt-8 pt-8 border-t border-outline-variant/30 flex flex-col items-center gap-4 mt-10 pt-10">
+<a class="text-sm font-medium text-primary hover:text-on-primary-fixed-variant transition-colors" href="#">
+                        Esqueceu sua senha?
+                    </a>
+<div class="flex items-center gap-4">
+<a class="text-xs text-on-surface-variant hover:underline" href="#">Central de Suporte</a>
+<span class="w-1 h-1 bg-outline-variant rounded-full"></span>
+<a class="text-xs text-on-surface-variant hover:underline" href="#">Política de Privacidade</a>
+</div>
+</div>
+</div>
+</div>
+<!-- Subtle Footer Branding -->
+<div class="mt-12 opacity-40 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="verified_user">verified_user</span>
+<span class="text-[10px] font-bold tracking-[0.2em] uppercase">Criptografia de Nível Empresarial</span>
+</div>
+</main>
+<!-- Visual Element: Temperature Detail (Contextual background element) -->
+<div class="fixed bottom-12 -left-12 opacity-5 pointer-events-none hidden lg:block">
+<span class="font-headline font-bold text-[18rem] leading-none text-primary">-18°</span>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body></html>

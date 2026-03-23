@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#e0e3e5",
+              "primary": "#006399",
+              "on-primary-fixed": "#001d32",
+              "surface-container": "#eceef0",
+              "tertiary-fixed-dim": "#ffb781",
+              "on-surface": "#191c1e",
+              "on-surface-variant": "#3f484c",
+              "outline": "#6f787d",
+              "surface-container-lowest": "#ffffff",
+              "error-container": "#ffdad6",
+              "surface-bright": "#f7f9fb",
+              "primary-container": "#8fcaff",
+              "on-error": "#ffffff",
+              "primary-fixed-dim": "#94ccff",
+              "primary-fixed": "#cde5ff",
+              "on-tertiary-container": "#7f4000",
+              "surface-variant": "#e0e3e5",
+              "on-tertiary-fixed-variant": "#703800",
+              "on-secondary": "#ffffff",
+              "tertiary-fixed": "#ffdcc4",
+              "on-secondary-fixed-variant": "#5e4100",
+              "background": "#f7f9fb",
+              "secondary-container": "#ffb702",
+              "secondary-fixed-dim": "#ffba27",
+              "on-error-container": "#93000a",
+              "on-background": "#191c1e",
+              "inverse-on-surface": "#eff1f3",
+              "tertiary-container": "#ffb47c",
+              "surface": "#f7f9fb",
+              "surface-container-low": "#f2f4f6",
+              "secondary-fixed": "#ffdea9",
+              "surface-tint": "#006399",
+              "outline-variant": "#bfc8cd",
+              "surface-dim": "#d8dadc",
+              "secondary": "#7d5800",
+              "on-primary-container": "#005584",
+              "inverse-surface": "#2d3133",
+              "on-tertiary-fixed": "#301400",
+              "surface-container-high": "#e6e8ea",
+              "on-primary-fixed-variant": "#004b74",
+              "on-tertiary": "#ffffff",
+              "on-primary": "#ffffff",
+              "inverse-primary": "#94ccff",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#6b4b00",
+              "tertiary": "#934b00",
+              "on-secondary-fixed": "#271900"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background-color: #f7f9fb;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-background selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+
+<main class="max-w-xl mx-auto px-6 pt-8 pb-32">
+<!-- Step Indicator -->
+<div class="mb-10">
+<div class="flex items-end justify-between mb-4">
+<div>
+<span class="font-headline font-bold text-primary text-sm uppercase tracking-widest block mb-1">Etapa 1 de 3</span>
+<h2 class="font-headline font-bold text-3xl text-on-surface">Identificação</h2>
+</div>
+<div class="flex gap-1.5 mb-2">
+<div class="h-1.5 w-12 rounded-full bg-primary"></div>
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm">Preencha os dados básicos para registrar a nova unidade de armazenamento térmico.</p>
+</div>
+<section class="space-y-8">
+<!-- Form Fields Bento-ish Group -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Nome da Câmara -->
+<div class="md:col-span-2 group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="chamber_name">Nome da Câmara</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant" id="chamber_name" placeholder="Ex: Freezer B - Laboratório" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">shelves</span>
+</div>
+</div>
+<!-- Localização -->
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="location">Localização</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant" id="location" placeholder="Ex: Doca 04" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">location_on</span>
+</div>
+</div>
+<!-- Tipo de Unidade -->
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="unit_type">Tipo de Unidade</label>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all appearance-none cursor-pointer" id="unit_type">
+<option value="congelador">Congelador</option>
+<option value="resfriador">Resfriador</option>
+<option value="estufa">Estufa / Aquecida</option>
+<option value="ambiente">Climatizado (Ambiente)</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none group-focus-within:text-primary transition-colors">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Limit Settings (The Atmospheric Gauge/Slider Style) -->
+<div class="bg-surface-container-low rounded-lg p-6 space-y-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container">thermostat</span>
+</div>
+<div>
+<h3 class="font-headline font-bold text-on-surface">Limites de Segurança</h3>
+<p class="text-xs text-on-surface-variant">Defina a faixa de operação aceitável</p>
+</div>
+</div>
+<div class="space-y-10 px-2">
+<!-- Temperatura Mínima -->
+<div class="relative">
+<div class="flex justify-between items-center mb-3">
+<label class="text-sm font-semibold text-on-surface-variant">Temperatura Mínima</label>
+<span class="font-headline font-bold text-primary text-xl">-25°C</span>
+</div>
+<div class="relative h-2 w-full bg-surface-container-highest rounded-full">
+<div class="absolute left-0 top-0 h-full w-1/4 bg-primary rounded-full"></div>
+<div class="absolute left-1/4 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-4 border-primary shadow-lg rounded-full cursor-pointer active:scale-125 transition-transform"></div>
+</div>
+<div class="flex justify-between mt-2 text-[10px] text-outline uppercase tracking-widest font-bold">
+<span>-40°C</span>
+<span>0°C</span>
+</div>
+</div>
+<!-- Temperatura Máxima -->
+<div class="relative">
+<div class="flex justify-between items-center mb-3">
+<label class="text-sm font-semibold text-on-surface-variant">Temperatura Máxima</label>
+<span class="font-headline font-bold text-secondary text-xl">-15°C</span>
+</div>
+<div class="relative h-2 w-full bg-surface-container-highest rounded-full">
+<div class="absolute left-0 top-0 h-full w-[40%] bg-secondary-container rounded-full"></div>
+<div class="absolute left-[40%] top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-4 border-secondary shadow-lg rounded-full cursor-pointer active:scale-125 transition-transform"></div>
+</div>
+<div class="flex justify-between mt-2 text-[10px] text-outline uppercase tracking-widest font-bold">
+<span>-40°C</span>
+<span>0°C</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Fixed Action Button (Suppressed as per rules for sub-pages, using standard footer button) -->
+<div class="fixed bottom-0 left-0 w-full p-6 bg-white/60 backdrop-blur-xl border-t border-white/20 z-40">
+<div class="max-w-xl mx-auto">
+<button class="w-full bg-primary text-white font-headline font-bold py-5 rounded-full shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all">
+<span>PRÓXIMO</span>
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Navigation Suppressed for Focused Task (New Chamber Registration) as per Shell Visibility Rule -->
+<script type="module" src="/src/main.ts"></script>
+</body></html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Histórico de Alertas - Get Temp</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#e0e3e5",
+              "primary": "#006399",
+              "on-primary-fixed": "#001d32",
+              "surface-container": "#eceef0",
+              "tertiary-fixed-dim": "#ffb781",
+              "on-surface": "#191c1e",
+              "on-surface-variant": "#3f484c",
+              "outline": "#6f787d",
+              "surface-container-lowest": "#ffffff",
+              "error-container": "#ffdad6",
+              "surface-bright": "#f7f9fb",
+              "primary-container": "#8fcaff",
+              "on-error": "#ffffff",
+              "primary-fixed-dim": "#94ccff",
+              "primary-fixed": "#cde5ff",
+              "on-tertiary-container": "#7f4000",
+              "surface-variant": "#e0e3e5",
+              "on-tertiary-fixed-variant": "#703800",
+              "on-secondary": "#ffffff",
+              "tertiary-fixed": "#ffdcc4",
+              "on-secondary-fixed-variant": "#5e4100",
+              "background": "#f7f9fb",
+              "secondary-container": "#ffb702",
+              "secondary-fixed-dim": "#ffba27",
+              "on-error-container": "#93000a",
+              "on-background": "#191c1e",
+              "inverse-on-surface": "#eff1f3",
+              "tertiary-container": "#ffb47c",
+              "surface": "#f7f9fb",
+              "surface-container-low": "#f2f4f6",
+              "secondary-fixed": "#ffdea9",
+              "surface-tint": "#006399",
+              "outline-variant": "#bfc8cd",
+              "surface-dim": "#d8dadc",
+              "secondary": "#7d5800",
+              "on-primary-container": "#005584",
+              "inverse-surface": "#2d3133",
+              "on-tertiary-fixed": "#301400",
+              "surface-container-high": "#e6e8ea",
+              "on-primary-fixed-variant": "#004b74",
+              "on-tertiary": "#ffffff",
+              "on-primary": "#ffffff",
+              "inverse-primary": "#94ccff",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#6b4b00",
+              "tertiary": "#934b00",
+              "on-secondary-fixed": "#271900"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Manrope', sans-serif; }
+        .font-headline { font-family: 'Space Grotesk', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+
+<main class="px-6 pt-6 max-w-4xl mx-auto">
+<!-- Hero Section Header -->
+<div class="mb-8">
+<h2 class="font-headline text-4xl font-bold tracking-tight text-on-surface mb-2">Alertas</h2>
+<p class="text-on-surface-variant font-medium">Monitoramento em tempo real das câmaras frias.</p>
+</div>
+<!-- Search & Filter Controls -->
+<div class="flex flex-col gap-4 mb-8">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary text-on-surface placeholder:text-outline-variant" placeholder="Buscar por câmara ou evento..." type="text"/>
+</div>
+<div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+<button class="px-5 py-2 bg-primary text-on-primary rounded-full font-semibold text-sm whitespace-nowrap">Tudo</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors">Críticos</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors">Avisos</button>
+<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="filter_list">filter_list</span>
+                    Filtrar
+                </button>
+</div>
+</div>
+<!-- Alerts List (Editorial Bento-ish layout) -->
+<div class="grid grid-cols-1 gap-4">
+<!-- Alert Card: Critical -->
+<div class="bg-surface-container-low p-5 rounded-lg border-l-4 border-error flex gap-4 items-start hover:bg-surface-container transition-colors group">
+<div class="bg-error-container p-3 rounded-2xl text-on-error-container">
+<span class="material-symbols-outlined text-2xl" data-icon="report" style="font-variation-settings: 'FILL' 1;">report</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline font-bold text-lg text-on-surface">Câmara de Vacinas A1</h3>
+<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 10 min</span>
+</div>
+<p class="text-error font-bold mb-3 flex items-center gap-1">
+                        Aumento Crítico de Temperatura
+                        <span class="material-symbols-outlined text-sm" data-icon="trending_up">trending_up</span>
+</p>
+<div class="flex items-center justify-between">
+<span class="text-sm font-semibold text-on-surface-variant">Valor: +8.4°C</span>
+<span class="bg-error/10 text-error text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Em andamento</span>
+</div>
+</div>
+</div>
+<!-- Alert Card: Warning -->
+<div class="bg-surface-container-low p-5 rounded-lg border-l-4 border-secondary-container flex gap-4 items-start hover:bg-surface-container transition-colors group">
+<div class="bg-secondary-fixed p-3 rounded-2xl text-on-secondary-container">
+<span class="material-symbols-outlined text-2xl" data-icon="notifications" style="font-variation-settings: 'FILL' 1;">notifications</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Fria Laticínios</h3>
+<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 45 min</span>
+</div>
+<p class="text-secondary font-bold mb-3">Porta Aberta por Longo Período</p>
+<div class="flex items-center justify-between">
+<span class="text-sm font-semibold text-on-surface-variant">Duração: 12 min</span>
+<span class="bg-secondary-fixed-dim/20 text-on-secondary-container text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Em andamento</span>
+</div>
+</div>
+</div>
+<!-- Alert Card: Resolved -->
+<div class="bg-surface-container-low/50 p-5 rounded-lg border-l-4 border-outline-variant flex gap-4 items-start opacity-75 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<div class="bg-surface-container-highest p-3 rounded-2xl text-on-surface-variant">
+<span class="material-symbols-outlined text-2xl" data-icon="check_circle">check_circle</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Congelados B2</h3>
+<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 2 horas</span>
+</div>
+<p class="text-on-surface-variant font-medium mb-3">Oscilação de Energia</p>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-outline">Status: Normalizado</span>
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Resolvido</span>
+</div>
+</div>
+</div>
+<!-- Alert Card: Critical (Resolved) -->
+<div class="bg-surface-container-low/50 p-5 rounded-lg border-l-4 border-outline-variant flex gap-4 items-start opacity-75 hover:opacity-100 transition-all">
+<div class="bg-surface-container-highest p-3 rounded-2xl text-on-surface-variant">
+<span class="material-symbols-outlined text-2xl" data-icon="ac_unit">ac_unit</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Central</h3>
+<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 5 horas</span>
+</div>
+<p class="text-on-surface-variant font-medium mb-3">Queda Brusca de Temperatura</p>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-outline">Valor: -22°C</span>
+<span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Resolvido</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+
+<script type="module" src="/src/main.ts"></script>
+</body></html>

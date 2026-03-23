@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ColdChain Control | Analytics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#301400",
+              "primary-fixed-dim": "#94ccff",
+              "on-tertiary-container": "#7f4000",
+              "on-secondary-container": "#6b4b00",
+              "surface-container-lowest": "#ffffff",
+              "on-primary": "#ffffff",
+              "background": "#f7f9fb",
+              "secondary-container": "#ffb702",
+              "on-primary-container": "#005584",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "on-primary-fixed": "#001d32",
+              "surface-tint": "#006399",
+              "surface-variant": "#e0e3e5",
+              "surface-dim": "#d8dadc",
+              "inverse-on-surface": "#eff1f3",
+              "on-secondary": "#ffffff",
+              "surface-bright": "#f7f9fb",
+              "surface-container-high": "#e6e8ea",
+              "tertiary-fixed": "#ffdcc4",
+              "error-container": "#ffdad6",
+              "inverse-primary": "#94ccff",
+              "on-primary-fixed-variant": "#004b74",
+              "primary": "#006399",
+              "on-tertiary-fixed-variant": "#703800",
+              "on-background": "#191c1e",
+              "outline": "#6f787d",
+              "tertiary-fixed-dim": "#ffb781",
+              "tertiary-container": "#ffb47c",
+              "on-surface": "#191c1e",
+              "tertiary": "#934b00",
+              "surface-container": "#eceef0",
+              "on-tertiary": "#ffffff",
+              "primary-fixed": "#cde5ff",
+              "on-secondary-fixed": "#271900",
+              "on-surface-variant": "#3f484c",
+              "surface": "#f7f9fb",
+              "secondary-fixed-dim": "#ffba27",
+              "secondary-fixed": "#ffdea9",
+              "on-error": "#ffffff",
+              "error": "#ba1a1a",
+              "outline-variant": "#bfc8cd",
+              "surface-container-highest": "#e0e3e5",
+              "on-secondary-fixed-variant": "#5e4100",
+              "on-error-container": "#93000a",
+              "secondary": "#7d5800",
+              "primary-container": "#8fcaff"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body antialiased">
+<!-- TopAppBar -->
+
+<main class="max-w-7xl mx-auto px-6 pt-6 pb-32 space-y-10">
+<!-- Hero: Chamber Selector & Temperature Summary -->
+<section class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+<div class="space-y-2">
+<span class="font-label text-label-md text-on-surface-variant uppercase tracking-[0.2em]">Monitor de Ambiente</span>
+<div class="flex items-center gap-4">
+<h2 class="font-headline text-4xl md:text-5xl font-bold text-on-background tracking-tighter">Análise</h2>
+<div class="relative group">
+<select id="chamber-select" class="appearance-none flex items-center gap-2 px-4 py-2 bg-surface-container-low rounded-full hover:bg-surface-container-high transition-colors text-sm font-bold text-primary focus:outline-none cursor-pointer pr-10">
+<option value="ALL">Todas as Câmaras</option>
+</select>
+<span class="material-symbols-outlined text-primary absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Time Range Selectors -->
+<div id="time-filters" class="flex p-1 bg-surface-container-low rounded-full border border-outline-variant/10 shadow-sm">
+<button data-days="1" class="time-filter active-time px-6 py-2 rounded-full font-bold text-sm text-on-primary bg-primary transition-all">24h</button>
+<button data-days="7" class="time-filter px-6 py-2 rounded-full font-bold text-sm text-on-surface-variant hover:bg-surface-container-high transition-all">7d</button>
+<button data-days="30" class="time-filter px-6 py-2 rounded-full font-bold text-sm text-on-surface-variant hover:bg-surface-container-high transition-all">30d</button>
+</div>
+</section>
+<!-- Bento Grid: Stats & Analytics -->
+<div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6">
+<!-- Main Chart Panel -->
+<div class="md:col-span-4 lg:col-span-8 bg-gradient-to-br from-primary to-primary-container rounded-lg p-6 md:p-8 relative overflow-hidden flex flex-col justify-between min-h-[420px]">
+<div class="absolute inset-0 opacity-10" data-alt="Subtle geometric grid pattern for background depth" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+<div class="relative z-10 flex justify-between items-start">
+<div>
+<h3 class="font-headline text-2xl md:text-3xl font-bold text-on-primary leading-tight">Tendência de Desempenho</h3>
+<p class="text-on-primary/70 font-body">Mapeamento de estabilidade térmica em tempo real</p>
+</div>
+<div class="text-right">
+<div class="font-headline text-4xl md:text-5xl font-bold text-on-primary mb-1">2.4°C</div>
+<div class="flex items-center gap-1 justify-end text-on-primary/80">
+<span class="material-symbols-outlined text-sm" data-icon="trending_down">trending_down</span>
+<span class="text-xs font-bold uppercase tracking-wider">Ideal</span>
+</div>
+</div>
+</div>
+<!-- Abstract Line Chart Visualization -->
+<div class="relative h-48 mt-8">
+<svg class="w-full h-full overflow-visible" viewbox="0 0 400 100">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="white" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="white" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10 L 400 100 L 0 100 Z" fill="url(#chartGradient)"></path>
+<path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10" fill="none" stroke="white" stroke-linecap="round" stroke-width="3"></path>
+<circle cx="220" cy="30" fill="#ffb702" r="4"></circle>
+<text fill="white" font-family="Space Grotesk" font-size="6" text-anchor="middle" x="220" y="20">PICO 3.1°C</text>
+</svg>
+</div>
+<div class="flex justify-between text-on-primary/50 text-xs font-bold font-label tracking-widest uppercase mt-4">
+<span>00:00</span>
+<span>06:00</span>
+<span>12:00</span>
+<span>18:00</span>
+<span>23:59</span>
+</div>
+</div>
+<!-- Stats Cards Column -->
+<div class="md:col-span-4 lg:col-span-4 grid grid-cols-1 gap-6">
+<!-- MAX -->
+<div class="bg-surface-container-low rounded-lg p-6 flex items-center justify-between border-l-4 border-secondary-container">
+<div>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest font-label">Máximo</span>
+<div class="text-3xl font-headline font-bold text-on-background">4.8°C</div>
+</div>
+<div class="bg-secondary-container/20 p-3 rounded-full">
+<span class="material-symbols-outlined text-secondary" data-icon="thermometer_gain">thermometer_gain</span>
+</div>
+</div>
+<!-- MIN -->
+<div class="bg-surface-container-low rounded-lg p-6 flex items-center justify-between border-l-4 border-primary">
+<div>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest font-label">Mínimo</span>
+<div class="text-3xl font-headline font-bold text-on-background">-1.2°C</div>
+</div>
+<div class="bg-primary/10 p-3 rounded-full">
+<span class="material-symbols-outlined text-primary" data-icon="thermometer_loss">thermometer_loss</span>
+</div>
+</div>
+<!-- AVG -->
+<div class="bg-surface-container-low rounded-lg p-6 flex items-center justify-between border-l-4 border-outline-variant">
+<div>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest font-label">Média</span>
+<div class="text-3xl font-headline font-bold text-on-background">2.1°C</div>
+</div>
+<div class="bg-surface-container-highest p-3 rounded-full">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="analytics">analytics</span>
+</div>
+</div>
+</div>
+<!-- Alert Log (Full Width Row) -->
+<div class="md:col-span-4 lg:col-span-12 glass-panel rounded-lg p-8 border border-outline-variant/10 shadow-sm">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h3 class="font-headline text-2xl font-bold text-on-background">Log de Limites de Alerta</h3>
+<p class="text-on-surface-variant text-sm">Violações históricas de limites de segurança</p>
+</div>
+<button class="text-primary font-bold text-sm flex items-center gap-1 hover:underline">
+                        Baixar PDF
+                        <span class="material-symbols-outlined text-sm" data-icon="download">download</span>
+</button>
+</div>
+<div class="space-y-4">
+<!-- Log Item 1 -->
+<div class="flex items-center gap-6 p-4 rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low transition-colors group">
+<div class="w-12 h-12 rounded-full bg-tertiary-container/30 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-tertiary" data-icon="warning">warning</span>
+</div>
+<div class="flex-grow grid grid-cols-2 lg:grid-cols-4 items-center gap-x-8 gap-y-4">
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Timestamp</span>
+<span class="font-bold text-on-background">24 Out, 14:22</span>
+</div>
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Evento</span>
+<span class="font-bold text-tertiary">Aumento Crítico</span>
+</div>
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Valor de Pico</span>
+<span class="font-bold text-on-background">8.4°C</span>
+</div>
+<div class="text-right">
+<span class="px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-extrabold uppercase tracking-widest">Resolvido</span>
+</div>
+</div>
+</div>
+<!-- Log Item 2 -->
+<div class="flex items-center gap-6 p-4 rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low transition-colors group">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-secondary" data-icon="notifications_active">notifications_active</span>
+</div>
+<div class="flex-grow grid grid-cols-2 lg:grid-cols-4 items-center gap-x-8 gap-y-4">
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Timestamp</span>
+<span class="font-bold text-on-background">23 Out, 09:15</span>
+</div>
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Evento</span>
+<span class="font-bold text-secondary">Desvio do Sensor</span>
+</div>
+<div>
+<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Valor de Pico</span>
+<span class="font-bold text-on-background">5.2°C</span>
+</div>
+<div class="text-right">
+<span class="px-3 py-1 rounded-full bg-outline-variant/30 text-on-surface-variant text-[10px] font-extrabold uppercase tracking-widest">Auto-correção</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+
+<script type="module" src="/src/main.ts"></script>
+</body></html>

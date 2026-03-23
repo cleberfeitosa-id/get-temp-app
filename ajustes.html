@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#301400",
+              "primary-fixed-dim": "#94ccff",
+              "on-tertiary-container": "#7f4000",
+              "on-secondary-container": "#6b4b00",
+              "surface-container-lowest": "#ffffff",
+              "on-primary": "#ffffff",
+              "background": "#f7f9fb",
+              "secondary-container": "#ffb702",
+              "on-primary-container": "#005584",
+              "surface-container-low": "#f2f4f6",
+              "inverse-surface": "#2d3133",
+              "on-primary-fixed": "#001d32",
+              "surface-tint": "#006399",
+              "surface-variant": "#e0e3e5",
+              "surface-dim": "#d8dadc",
+              "inverse-on-surface": "#eff1f3",
+              "on-secondary": "#ffffff",
+              "surface-bright": "#f7f9fb",
+              "surface-container-high": "#e6e8ea",
+              "tertiary-fixed": "#ffdcc4",
+              "error-container": "#ffdad6",
+              "inverse-primary": "#94ccff",
+              "on-primary-fixed-variant": "#004b74",
+              "primary": "#006399",
+              "on-tertiary-fixed-variant": "#703800",
+              "on-background": "#191c1e",
+              "outline": "#6f787d",
+              "tertiary-fixed-dim": "#ffb781",
+              "tertiary-container": "#ffb47c",
+              "on-surface": "#191c1e",
+              "tertiary": "#934b00",
+              "surface-container": "#eceef0",
+              "on-tertiary": "#ffffff",
+              "primary-fixed": "#cde5ff",
+              "on-secondary-fixed": "#271900",
+              "on-surface-variant": "#3f484c",
+              "surface": "#f7f9fb",
+              "secondary-fixed-dim": "#ffba27",
+              "secondary-fixed": "#ffdea9",
+              "on-error": "#ffffff",
+              "error": "#ba1a1a",
+              "outline-variant": "#bfc8cd",
+              "surface-container-highest": "#e0e3e5",
+              "on-secondary-fixed-variant": "#5e4100",
+              "on-error-container": "#93000a",
+              "secondary": "#7d5800",
+              "primary-container": "#8fcaff"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-nav-fill .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body min-h-screen pb-32">
+<!-- TopAppBar -->
+
+<main class="max-w-5xl mx-auto px-6 pt-8 pb-12 space-y-10">
+<!-- Profile Section (Asymmetric Editorial Style) -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+<div class="md:col-span-7">
+<p class="font-headline text-label-md text-primary font-bold uppercase tracking-[0.2em] mb-2">Área da Conta</p>
+<h2 class="font-headline text-5xl md:text-6xl font-bold text-on-surface tracking-tighter leading-none">
+                    Alex <span class="text-outline-variant">Rivers</span>
+</h2>
+<p class="mt-4 text-on-surface-variant max-w-md">Gerente de Operações no Hub Logístico Norte. Gerenciando 4 zonas críticas.</p>
+</div>
+<div class="md:col-span-5 flex justify-end gap-3">
+<button class="px-6 py-3 rounded-full bg-surface-container-high text-on-surface-variant font-semibold text-sm hover:bg-surface-variant transition-colors">
+                    Editar Perfil
+                </button>
+<button class="px-6 py-3 rounded-full bg-error text-on-error font-semibold text-sm flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-lg" data-icon="logout">logout</span>
+                    Sair
+                </button>
+</div>
+</section>
+<!-- Bento Grid for Cold Chambers -->
+<section class="space-y-6">
+<div class="flex justify-between items-center">
+<h3 class="font-headline text-2xl font-bold tracking-tight">Câmaras Registradas</h3>
+<button class="flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                    Nova Câmara
+                </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Chamber Card 1 -->
+<div class="md:col-span-2 group relative overflow-hidden rounded-lg bg-surface-container-low p-8 flex flex-col justify-between min-h-[240px]">
+<div class="absolute top-0 right-0 p-6">
+<span class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-xs font-bold uppercase tracking-wider">Ativo</span>
+</div>
+<div>
+<span class="material-symbols-outlined text-4xl text-primary mb-4" data-icon="ac_unit">ac_unit</span>
+<h4 class="font-headline text-3xl font-bold text-on-surface">Congelador A</h4>
+<p class="text-on-surface-variant flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+                            Armazém Principal - Zona 1
+                        </p>
+</div>
+<div class="flex items-center gap-6 mt-8">
+<div>
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest">Temp. Atual</p>
+<p class="font-headline text-2xl font-bold text-on-primary-container sm:text-2xl">-18.4°C</p>
+</div>
+<div class="h-8 w-[1px] bg-outline-variant"></div>
+<div>
+<p class="text-[10px] uppercase font-bold text-outline tracking-widest">Estabilidade</p>
+<p class="font-headline text-2xl font-bold text-on-primary-container sm:text-2xl">99.2%</p>
+</div>
+</div>
+</div>
+<!-- Chamber Card 2 -->
+<div class="bg-surface-container-low rounded-lg p-6 flex flex-col justify-between border-t-4 border-primary">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary" data-icon="kitchen">kitchen</span>
+<button class="text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mt-4">
+<h4 class="font-headline text-xl font-bold">Refrigerador B</h4>
+<p class="text-on-surface-variant text-[13px]">Doca Oeste</p>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant/30">
+<p class="text-[10px] uppercase font-bold text-outline">Status</p>
+<p class="text-sm font-bold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="check_circle">check_circle</span>
+                            Otimizado
+                        </p>
+</div>
+</div>
+<!-- Chamber Card 3 -->
+<div class="bg-surface-container-low rounded-lg p-6 flex flex-col justify-between border-t-4 border-tertiary">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-tertiary" data-icon="medical_services">medical_services</span>
+<button class="text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mt-4">
+<h4 class="font-headline text-xl font-bold">Med-Store 1</h4>
+<p class="text-on-surface-variant text-[13px]">Ala Farmacêutica</p>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant/30">
+<p class="text-[10px] uppercase font-bold text-outline">Status</p>
+<p class="text-sm font-bold text-tertiary flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="warning">warning</span>
+                            Alta Umidade
+                        </p>
+</div>
+</div>
+<!-- Chamber Card 4 -->
+<div class="bg-surface-container-low rounded-lg p-6 flex flex-col justify-between border-t-4 border-primary">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary" data-icon="box">inventory_2</span>
+<button class="text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mt-4">
+<h4 class="font-headline text-xl font-bold">Câmara Fria</h4>
+<p class="text-on-surface-variant text-[13px]">Subsolo Seguro</p>
+</div>
+<div class="mt-6 pt-4 border-t border-outline-variant/30">
+<p class="text-[10px] uppercase font-bold text-outline">Status</p>
+<p class="text-sm font-bold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="check_circle">check_circle</span>
+                            Seguro
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Notification Preferences Section -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<div class="md:col-span-4">
+<h3 class="font-headline text-2xl font-bold tracking-tight">Central de Notificações</h3>
+<p class="text-on-surface-variant mt-2 text-sm leading-relaxed">
+                    Configure como e quando você recebe alertas ambientais. Alertas críticos ignoram as configurações de 'Não Perturbe'.
+                </p>
+</div>
+<div class="md:col-span-8 space-y-4">
+<!-- Preference Item 1 -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg flex items-center justify-between group hover:bg-white transition-all">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="emergency_home">emergency_home</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Alertas de Temperatura Crítica</h5>
+<p class="text-xs text-on-surface-variant">Push imediato e SMS quando os limites são atingidos</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Preference Item 2 -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg flex items-center justify-between group hover:bg-white transition-all">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="summarize">summarize</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Resumos Diários de Desempenho</h5>
+<p class="text-xs text-on-surface-variant">Relatório por e-mail da estabilidade média e uso de energia</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Preference Item 3 -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg flex items-center justify-between group hover:bg-white transition-all">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined" data-icon="build">build</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Lembretes de Manutenção</h5>
+<p class="text-xs text-on-surface-variant">Calibração de sensores e janelas de serviço de equipamentos</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+
+<script type="module" src="/src/main.ts"></script>
+</body></html>

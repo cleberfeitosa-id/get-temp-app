@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container": "#eceef0",
+              "primary": "#006399",
+              "surface-container-highest": "#e0e3e5",
+              "on-primary-fixed": "#001d32",
+              "tertiary-fixed-dim": "#ffb781",
+              "on-surface": "#191c1e",
+              "on-surface-variant": "#3f484c",
+              "error-container": "#ffdad6",
+              "surface-container-lowest": "#ffffff",
+              "outline": "#6f787d",
+              "primary-fixed": "#cde5ff",
+              "primary-fixed-dim": "#94ccff",
+              "on-error": "#ffffff",
+              "surface-bright": "#f7f9fb",
+              "primary-container": "#8fcaff",
+              "on-secondary": "#ffffff",
+              "on-tertiary-fixed-variant": "#703800",
+              "surface-variant": "#e0e3e5",
+              "on-tertiary-container": "#7f4000",
+              "on-background": "#191c1e",
+              "secondary-fixed-dim": "#ffba27",
+              "on-error-container": "#93000a",
+              "secondary-container": "#ffb702",
+              "on-secondary-fixed-variant": "#5e4100",
+              "background": "#f7f9fb",
+              "tertiary-fixed": "#ffdcc4",
+              "inverse-on-surface": "#eff1f3",
+              "surface": "#f7f9fb",
+              "tertiary-container": "#ffb47c",
+              "surface-container-low": "#f2f4f6",
+              "secondary-fixed": "#ffdea9",
+              "secondary": "#7d5800",
+              "on-primary-container": "#005584",
+              "surface-dim": "#d8dadc",
+              "inverse-surface": "#2d3133",
+              "surface-tint": "#006399",
+              "outline-variant": "#bfc8cd",
+              "on-primary": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "surface-container-high": "#e6e8ea",
+              "on-primary-fixed-variant": "#004b74",
+              "on-tertiary-fixed": "#301400",
+              "inverse-primary": "#94ccff",
+              "on-secondary-container": "#6b4b00",
+              "error": "#ba1a1a",
+              "on-secondary-fixed": "#271900",
+              "tertiary": "#934b00"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .sky-gradient {
+            background: linear-gradient(135deg, #f7f9fb 0%, #cde5ff 100%);
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen sky-gradient selection:bg-primary-container">
+<!-- TopAppBar -->
+
+<main class="pt-6 pb-32 px-6 flex flex-col items-center min-h-screen">
+<!-- Main Chamber Status: Câmara 01 -->
+<section class="w-full py-6 flex flex-col items-start relative overflow-hidden">
+<div class="relative z-10 w-full">
+<div class="inline-flex items-center px-4 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-bold tracking-wide mb-4">
+<span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'FILL' 1;">sensors</span>
+                    STATUS DAS CÂMARAS ATIVAS
+                </div>
+<div class="flex items-end justify-between w-full">
+<div>
+<p id="cam_name" class="text-sm font-label text-on-surface-variant uppercase tracking-widest mb-1">Câmara 01</p>
+<h2 class="font-headline leading-none font-bold tracking-tighter text-on-surface flex items-start text-[7rem]"><span id="cam_temp">-18</span><span class="text-primary-container -mt-4">°</span><span class="text-5xl mt-6 font-semibold ml-1">C</span></h2>
+</div>
+<div class="mb-4 text-right">
+<div class="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider mb-2">
+<span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
+                            Estável
+                        </div>
+</div>
+</div>
+<div class="mt-8 flex items-center gap-4">
+<div class="p-3 bg-white rounded-full shadow-sm ring-1 ring-black/5">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<p id="system_status" class="text-2xl font-headline font-medium text-on-surface-variant">Sistema Normal</p>
+</div>
+</div>
+<!-- Decorative Glow Background Element -->
+<div class="absolute -right-20 -top-10 w-64 h-64 bg-primary-container/20 blur-[80px] rounded-full"></div>
+</section>
+<!-- Bento Details Section & Sub-Chambers -->
+<section class="w-full grid grid-cols-2 gap-4 mt-6">
+<div id="dynamic-chambers-grid" class="contents"></div>
+</section>
+</main>
+<!-- BottomNavBar -->
+
+
+
+<script type="module" src="/src/main.ts"></script>
+</body></html>
