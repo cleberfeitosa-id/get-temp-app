@@ -1,4 +1,5 @@
 import './style.css';
+import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, type SensorReading } from './dataService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -69,13 +70,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Re-run dynamic script logic if on Dashboard (index.html)
   if (currentPath.endsWith('index.html') || currentPath === '/') {
-    fetch('/mock/esp32_mock.json')
-      .then(response => response.json())
-      .then(dataArray => {
+    getReadings().then(dataArray => {
         if (!dataArray || dataArray.length === 0) return;
         
         // Grab the most recent reading for Câmara 01 for the main dashboard
-        const cam1Readings = dataArray.filter((d: any) => d.device_id === 'CAM01');
+        const cam1Readings = filterByChamber(dataArray, 'CAM01');
         const mainData = cam1Readings[cam1Readings.length - 1] || dataArray[0];
         
         const camNameEl = document.getElementById('cam_name');
@@ -96,11 +95,11 @@ document.addEventListener("DOMContentLoaded", () => {
             let gridHtml = '';
             
             // Unique devices snippet
-            const uniqueDevices = [...new Set(dataArray.map((d: any) => d.device_id))];
+            const uniqueDevices = getUniqueDevices(dataArray);
             
             for (let deviceId of uniqueDevices) {
-                const readings = dataArray.filter((d: any) => d.device_id === deviceId);
-                const latest = readings[readings.length - 1];
+                const readings = filterByChamber(dataArray, deviceId);
+                const latest = readings[readings.length - 1] as SensorReading;
                 
                 const isSafe = latest.connection === 'Connected' && latest.temp < -15;
                 const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
@@ -143,24 +142,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const deviceId = urlParams.get('id');
 
     if (deviceId) {
-      fetch('/mock/esp32_mock.json')
-        .then(response => response.json())
-        .then(dataArray => {
+      getReadings().then((dataArray: SensorReading[]) => {
           if (!dataArray || dataArray.length === 0) return;
-          const readings = dataArray.filter((d: any) => d.device_id === deviceId);
+          const readings: SensorReading[] = filterByChamber(dataArray, deviceId);
           if (readings.length === 0) return;
-          const latest = readings[readings.length - 1];
+          const latest: SensorReading = readings[readings.length - 1];
           const tempHeader = document.querySelector('h1.text-\\[5\\.5rem\\]');
           if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
           
-          const temps = readings.map((r: any) => r.temp);
+          const temps = readings.map((r: SensorReading) => r.temp);
           const minT = Math.min(...temps) - 2;
           const maxT = Math.max(...temps) + 2;
           const range = maxT - minT || 1;
           const svgWidth = 400;
           const svgHeight = 100;
           
-          const points = readings.map((r: any, idx: number) => {
+          const points = readings.map((r: SensorReading, idx: number) => {
              const x = (idx / (readings.length - 1)) * svgWidth;
              const y = svgHeight - ((r.temp - minT) / range) * svgHeight;
              return {x, y};
@@ -179,7 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const logsContainer = document.querySelector('.space-y-3');
           if (logsContainer) {
               logsContainer.innerHTML = '';
-              [...readings].reverse().forEach((r: any) => {
+              [...readings].reverse().forEach((r: SensorReading) => {
                   const safeStr = (r.temp < -15 && r.connection === 'Connected');
                   const color = safeStr ? 'bg-primary' : 'bg-secondary';
                   const title = r.connection === 'Disconnected' ? 'Equipamento Offline' : (safeStr ? 'Leitura Estável' : 'Alerta de Temperatura');
@@ -195,42 +192,25 @@ document.addEventListener("DOMContentLoaded", () => {
                   logsContainer.insertAdjacentHTML('beforeend', logHtml);
               });
           }
-        })
-        .catch(console.error);
+        });
     }
   }
 
   // Phase 5 & 6: Dynamic Analysis Page Logic
   if (currentPath.includes('analise.html')) {
-      let globalData: any[] = [];
+      let globalData: SensorReading[] = [];
       let currentChamber = 'ALL';
       let currentDays = 1;
 
       const renderAnalytics = () => {
           if (globalData.length === 0) return;
 
-          // Time Filter logic
-          // Lets assume "now" is the latest date in the mock to make it realistic
-          const dates = globalData.map(d => new Date(`${d.date}T${d.time}`).getTime());
-          const latestTime = Math.max(...dates);
-          const cutoffTime = latestTime - (currentDays * 24 * 60 * 60 * 1000);
-
-          let filtered = globalData.filter(d => {
-              const dt = new Date(`${d.date}T${d.time}`).getTime();
-              return dt >= cutoffTime;
-          });
-
-          if (currentChamber !== 'ALL') {
-              filtered = filtered.filter(d => d.device_id === currentChamber);
-          }
-
+          let filtered = filterByDays(globalData, currentDays);
+          filtered = filterByChamber(filtered, currentChamber);
           if (filtered.length === 0) filtered = [globalData[0]]; // fallback if empty
 
           // 1. Calculate Stats
-          const temps = filtered.map((d: any) => d.temp);
-          const maxTemp = Math.max(...temps);
-          const minTemp = Math.min(...temps);
-          const avgTemp = temps.reduce((a: number, b: number) => a + b, 0) / temps.length;
+          const { max: maxTemp, min: minTemp, avg: avgTemp } = calcStats(filtered);
           
           const statBlocks = document.querySelectorAll('.text-3xl.font-headline');
           if (statBlocks.length >= 3) {
@@ -243,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const range = maxTemp - minTemp || 1;
           const svgWidth = 400;
           const svgHeight = 100;
-          const points = filtered.map((r: any, idx: number) => {
+          const points = filtered.map((r: SensorReading, idx: number) => {
              const x = (idx / (filtered.length - 1 || 1)) * svgWidth;
              const y = svgHeight - ((r.temp - minTemp) / range) * svgHeight;
              return {x, y};
@@ -262,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const logContainer = document.querySelector('.space-y-4');
           if (logContainer) {
               logContainer.innerHTML = '';
-              [...filtered].reverse().forEach((r: any) => {
+              [...filtered].reverse().forEach((r: SensorReading) => {
                   const isAlert = r.temp >= -15 || r.connection === 'Disconnected';
                   if (!isAlert) return;
                   
@@ -294,21 +274,19 @@ document.addEventListener("DOMContentLoaded", () => {
           }
       };
 
-      fetch('/mock/esp32_mock.json')
-        .then(response => response.json())
-        .then(dataArray => {
+      getReadings().then(dataArray => {
             if (!dataArray || dataArray.length === 0) return;
             globalData = dataArray;
             
             // Populate Dropdown
             const selectEl = document.getElementById('chamber-select') as HTMLSelectElement;
             if (selectEl) {
-                const uniqueChambers = Array.from(new Set(globalData.map((d:any) => d.device_id)));
+                const uniqueChambers = getUniqueDevices(globalData);
                 uniqueChambers.forEach(id => {
-                    const cInfo = globalData.find((d:any) => d.device_id === id);
+                    const cInfo = globalData.find((d: SensorReading) => d.device_id === id);
                     const opt = document.createElement('option');
                     opt.value = id;
-                    opt.textContent = cInfo.name;
+                    opt.textContent = cInfo?.name ?? id;
                     selectEl.appendChild(opt);
                 });
 
@@ -382,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Initial Render
             renderAnalytics();
-        });
+      });
   }
 
   // Phase 7: Comprehensive Dynamic Reports Export
@@ -424,13 +402,13 @@ document.addEventListener("DOMContentLoaded", () => {
          });
      });
 
-     fetch('/mock/esp32_mock.json').then(r => r.json()).then(data => {
+     getReadings().then(data => {
          if(!data || data.length === 0) return;
 
          // Sync Date bounds
-         const dates = data.map((d:any) => new Date(`${d.date}T${d.time}`).getTime());
-         const minDate = new Date(Math.min(...dates));
-         const maxDate = new Date(Math.max(...dates));
+         const bounds = getDateBounds(data);
+         if (!bounds) return;
+         const { min: minDate, max: maxDate } = bounds;
          
          const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', {day: '2-digit', month: 'short', year: 'numeric'});
          const sDateInput = document.getElementById('date-start') as HTMLInputElement;
