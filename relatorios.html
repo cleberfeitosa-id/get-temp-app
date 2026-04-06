@@ -111,45 +111,28 @@
 <span class="material-symbols-outlined text-primary" data-icon="category">category</span>
                         Selecione o Tipo de Relatório
                     </h3>
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-<button data-type="Resumo Semanal" class="type-btn flex flex-col items-start p-6 rounded-2xl border-2 border-primary bg-primary/5 text-left transition-all shadow-sm">
-<span class="material-symbols-outlined mb-4 text-primary text-3xl" data-icon="date_range" style="font-variation-settings: 'FILL' 1;">date_range</span>
-<span class="w-full">Resumo Semanal</span>
-<span class="w-full">Ciclo completo de medições de temperatura e eventos.</span>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<button data-type="Relatório Completo" class="type-btn flex flex-col items-start p-6 rounded-2xl border-2 border-primary bg-primary/5 text-left transition-all shadow-sm">
+<span class="material-symbols-outlined mb-4 text-primary text-3xl" data-icon="insert_chart" style="font-variation-settings: 'FILL' 1;">insert_chart</span>
+<span class="w-full font-bold">Relatório Completo</span>
+<span class="w-full text-xs mt-1 text-on-surface-variant">Ciclo integral de medições e desempenho ao longo do tempo.</span>
 </button>
-<button data-type="Auditoria de Qualidade" class="type-btn flex flex-col items-start p-6 rounded-2xl border-2 border-transparent bg-surface-container-low text-left transition-all hover:bg-surface-container-high">
+<button data-type="Auditoria Focada em Riscos" class="type-btn flex flex-col items-start p-6 rounded-2xl border-2 border-transparent bg-surface-container-low text-left transition-all hover:bg-surface-container-high">
 <span class="material-symbols-outlined mb-4 text-outline text-3xl" data-icon="verified_user">verified_user</span>
-<span class="w-full">Auditoria de Qualidade</span>
-<span class="w-full">Relatório focado em conformidade para cadeia fria.</span>
-</button>
-<button data-type="Histórico de Alertas" class="type-btn flex flex-col items-start p-6 rounded-2xl border-2 border-transparent bg-surface-container-low text-left transition-all hover:bg-surface-container-high">
-<span class="material-symbols-outlined mb-4 text-outline text-3xl" data-icon="warning">warning</span>
-<span class="w-full">Histórico de Alertas</span>
-<span class="w-full">Linha do tempo de todos os eventos de e desvios.</span>
+<span class="w-full font-bold">Auditoria de Riscos</span>
+<span class="w-full text-xs mt-1 text-on-surface-variant">Apenas incidentes e leitura crítica.</span>
 </button>
 </div>
 </section>
-<!-- Date Range Picker -->
-<section class="glass-card p-8 rounded-lg border border-outline-variant/15 mb-4">
-<h3 class="font-headline text-lg font-bold mb-6 flex items-center gap-2">
-<span class="material-symbols-outlined text-primary" data-icon="calendar_month">calendar_month</span>
-                        Intervalo de Datas
+<!-- Camera Filter Options -->
+<section class="glass-card p-8 rounded-lg border border-outline-variant/15 mb-4 relative overflow-hidden">
+<h3 class="font-headline text-lg font-bold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="videocam">videocam</span>
+                        Filtro por Equipamento
                     </h3>
-<div class="space-y-4">
-<div class="relative">
-<label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">Data Inicial</label>
-<div class="bg-surface-container-lowest rounded-full px-4 py-3 flex items-center gap-3 border border-outline-variant/20 shadow-sm">
-<span class="material-symbols-outlined text-outline text-sm" data-icon="event">event</span>
-<input id="date-start" class="bg-transparent border-none focus:ring-0 text-sm font-semibold w-full" type="text" value="12 Out, 2023" readonly/>
-</div>
-</div>
-<div class="relative">
-<label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1 ml-1">Data Final</label>
-<div class="bg-surface-container-lowest rounded-full px-4 py-3 flex items-center gap-3 border border-outline-variant/20 shadow-sm">
-<span class="material-symbols-outlined text-outline text-sm" data-icon="event">event</span>
-<input id="date-end" class="bg-transparent border-none focus:ring-0 text-sm font-semibold w-full" type="text" value="19 Out, 2023" readonly/>
-</div>
-</div>
+<div id="camera-filter-container" class="space-y-3">
+<!-- Injected via TS -->
+<div class="animate-pulse flex items-center gap-3 py-2"><div class="w-5 h-5 bg-surface-variant rounded"></div><div class="h-4 bg-surface-variant rounded w-32"></div></div>
 </div>
 </section>
 <!-- Customization Options -->
@@ -183,7 +166,7 @@
 </section>
 <!-- Action Section -->
 <div class="md:col-span-2 flex justify-end pt-4">
-<button class="bg-primary text-white font-headline font-bold px-10 py-5 rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3">
+<button id="btn-generate-report" class="bg-primary text-white font-headline font-bold px-10 py-5 rounded-full shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-3">
 <span class="material-symbols-outlined" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
                         Gerar Relatório
                     </button>

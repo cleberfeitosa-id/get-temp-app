@@ -121,7 +121,7 @@
                     Nova Câmara
                 </button>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div id="cameras-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
 <!-- Chamber Card 1 -->
 <div class="md:col-span-2 group relative overflow-hidden rounded-lg bg-surface-container-low p-8 flex flex-col justify-between min-h-[240px]">
 <div class="absolute top-0 right-0 p-6">
@@ -270,6 +270,59 @@
 </section>
 </main>
 <!-- BottomNavBar -->
+
+<!-- Edit Profile Modal -->
+<div id="edit-profile-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" id="modal-backdrop"></div>
+  <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+    <div class="flex justify-between items-center">
+      <h3 class="font-headline text-2xl font-bold">Editar Perfil</h3>
+      <button id="close-modal" class="text-outline hover:text-on-surface transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-name">Nome Completo</label>
+        <input id="edit-name" type="text" value="Alex Rivers" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-email">Email</label>
+        <input id="edit-email" type="email" value="alex.rivers@gettemp.io" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-role">Cargo</label>
+        <input id="edit-role" type="text" value="Gerente de Operações" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+      <div class="pt-2 border-t border-outline-variant/20">
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-company">Empresa</label>
+        <input id="edit-company" type="text" value="Get Temp Ltda" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-company-location">Localização da Empresa</label>
+        <input id="edit-company-location" type="text" value="São Paulo, SP - Brasil" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2" for="edit-company-cnpj">CNPJ</label>
+        <input id="edit-company-cnpj" type="text" value="00.000.000/0001-00" class="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-on-surface focus:ring-2 focus:ring-primary-container transition-all" />
+      </div>
+    </div>
+    <div class="flex gap-3">
+      <button id="modal-cancel" class="flex-1 py-3 rounded-full border border-outline-variant text-on-surface font-semibold hover:bg-surface-container transition-colors">Cancelar</button>
+      <button id="modal-save" class="flex-1 py-3 rounded-full bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-opacity">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="fixed z-[200] hidden bg-white rounded-xl shadow-2xl border border-outline-variant/20 overflow-hidden min-w-[180px]">
+  <button class="w-full text-left px-4 py-3 text-sm font-medium hover:bg-surface-container-low flex items-center gap-3">
+    <span class="material-symbols-outlined text-primary text-base">edit</span>Editar câmara
+  </button>
+  <button class="w-full text-left px-4 py-3 text-sm font-medium hover:bg-surface-container-low flex items-center gap-3 text-error">
+    <span class="material-symbols-outlined text-error text-base">delete</span>Remover câmara
+  </button>
+</div>
 
 <script type="module" src="/src/main.ts"></script>
 </body></html>

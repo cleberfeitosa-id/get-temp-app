@@ -98,91 +98,24 @@
 <div class="flex flex-col gap-4 mb-8">
 <div class="relative w-full">
 <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
-<input class="w-full bg-surface-container-low border-none rounded-xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary text-on-surface placeholder:text-outline-variant" placeholder="Buscar por câmara ou evento..." type="text"/>
+<input id="search-input" class="w-full bg-surface-container-low border-none rounded-xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary text-on-surface placeholder:text-outline-variant" placeholder="Buscar por câmara ou evento..." type="text"/>
 </div>
 <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-<button class="px-5 py-2 bg-primary text-on-primary rounded-full font-semibold text-sm whitespace-nowrap">Tudo</button>
-<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors">Críticos</button>
-<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors">Avisos</button>
-<button class="px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors flex items-center gap-1">
+<button class="filter-btn px-5 py-2 bg-primary text-on-primary rounded-full font-semibold text-sm whitespace-nowrap" data-filter="all">Tudo</button>
+<button class="filter-btn px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors" data-filter="critical">Críticos</button>
+<button class="filter-btn px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors" data-filter="warning">Avisos</button>
+<button class="filter-btn px-5 py-2 bg-surface-container-high text-on-surface-variant rounded-full font-semibold text-sm whitespace-nowrap hover:bg-surface-container-highest transition-colors flex items-center gap-1" data-filter="all">
 <span class="material-symbols-outlined text-sm" data-icon="filter_list">filter_list</span>
                     Filtrar
                 </button>
 </div>
 </div>
-<!-- Alerts List (Editorial Bento-ish layout) -->
-<div class="grid grid-cols-1 gap-4">
-<!-- Alert Card: Critical -->
-<div class="bg-surface-container-low p-5 rounded-lg border-l-4 border-error flex gap-4 items-start hover:bg-surface-container transition-colors group">
-<div class="bg-error-container p-3 rounded-2xl text-on-error-container">
-<span class="material-symbols-outlined text-2xl" data-icon="report" style="font-variation-settings: 'FILL' 1;">report</span>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start mb-1">
-<h3 class="font-headline font-bold text-lg text-on-surface">Câmara de Vacinas A1</h3>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 10 min</span>
-</div>
-<p class="text-error font-bold mb-3 flex items-center gap-1">
-                        Aumento Crítico de Temperatura
-                        <span class="material-symbols-outlined text-sm" data-icon="trending_up">trending_up</span>
-</p>
-<div class="flex items-center justify-between">
-<span class="text-sm font-semibold text-on-surface-variant">Valor: +8.4°C</span>
-<span class="bg-error/10 text-error text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Em andamento</span>
-</div>
-</div>
-</div>
-<!-- Alert Card: Warning -->
-<div class="bg-surface-container-low p-5 rounded-lg border-l-4 border-secondary-container flex gap-4 items-start hover:bg-surface-container transition-colors group">
-<div class="bg-secondary-fixed p-3 rounded-2xl text-on-secondary-container">
-<span class="material-symbols-outlined text-2xl" data-icon="notifications" style="font-variation-settings: 'FILL' 1;">notifications</span>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start mb-1">
-<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Fria Laticínios</h3>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 45 min</span>
-</div>
-<p class="text-secondary font-bold mb-3">Porta Aberta por Longo Período</p>
-<div class="flex items-center justify-between">
-<span class="text-sm font-semibold text-on-surface-variant">Duração: 12 min</span>
-<span class="bg-secondary-fixed-dim/20 text-on-secondary-container text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Em andamento</span>
-</div>
-</div>
-</div>
-<!-- Alert Card: Resolved -->
-<div class="bg-surface-container-low/50 p-5 rounded-lg border-l-4 border-outline-variant flex gap-4 items-start opacity-75 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
-<div class="bg-surface-container-highest p-3 rounded-2xl text-on-surface-variant">
-<span class="material-symbols-outlined text-2xl" data-icon="check_circle">check_circle</span>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start mb-1">
-<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Congelados B2</h3>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 2 horas</span>
-</div>
-<p class="text-on-surface-variant font-medium mb-3">Oscilação de Energia</p>
-<div class="flex items-center justify-between">
-<span class="text-sm font-medium text-outline">Status: Normalizado</span>
-<span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Resolvido</span>
-</div>
-</div>
-</div>
-<!-- Alert Card: Critical (Resolved) -->
-<div class="bg-surface-container-low/50 p-5 rounded-lg border-l-4 border-outline-variant flex gap-4 items-start opacity-75 hover:opacity-100 transition-all">
-<div class="bg-surface-container-highest p-3 rounded-2xl text-on-surface-variant">
-<span class="material-symbols-outlined text-2xl" data-icon="ac_unit">ac_unit</span>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start mb-1">
-<h3 class="font-headline font-bold text-lg text-on-surface">Câmara Central</h3>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline">Há 5 horas</span>
-</div>
-<p class="text-on-surface-variant font-medium mb-3">Queda Brusca de Temperatura</p>
-<div class="flex items-center justify-between">
-<span class="text-sm font-medium text-outline">Valor: -22°C</span>
-<span class="bg-surface-container-highest text-on-surface-variant text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-tighter">Resolvido</span>
-</div>
-</div>
-</div>
+<!-- Alerts List — populated dynamically by main.ts -->
+<div id="alerts-list" class="grid grid-cols-1 gap-4">
+  <!-- Loading skeleton -->
+  <div class="bg-surface-container-low p-5 rounded-lg animate-pulse h-28"></div>
+  <div class="bg-surface-container-low p-5 rounded-lg animate-pulse h-28 opacity-70"></div>
+  <div class="bg-surface-container-low p-5 rounded-lg animate-pulse h-28 opacity-50"></div>
 </div>
 </main>
 <!-- BottomNavBar -->

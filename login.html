@@ -125,7 +125,7 @@
 <h2 class="font-headline text-2xl font-semibold text-on-surface">Acesso Seguro</h2>
 <p class="text-on-surface-variant text-sm mt-1">Acesse as métricas da sua unidade de armazenamento</p>
 </div>
-<form action="#" class="space-y-8">
+<form id="login-form" action="#" class="space-y-8">
 <!-- Email Field -->
 <div class="relative floating-label-input group">
 <input class="block w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT focus:ring-2 focus:ring-primary/20 transition-all duration-300" id="email" name="email" placeholder=" " required="" type="email"/>
@@ -139,15 +139,19 @@
 <label class="absolute left-4 top-4 text-on-surface-variant transition-all duration-300 pointer-events-none origin-left" for="password">
                             Senha
                         </label>
-<button class="absolute right-4 top-4 text-on-surface-variant hover:text-primary transition-colors" type="button">
+<button id="toggle-password" class="absolute right-4 top-4 text-on-surface-variant hover:text-primary transition-colors" type="button">
 <span class="material-symbols-outlined" data-icon="visibility">visibility</span>
 </button>
+</div>
+<div id="login-error" class="hidden text-sm text-error font-semibold py-2 px-4 bg-error-container rounded-xl flex items-center gap-2">
+  <span class="material-symbols-outlined text-base">error</span>
+  <span id="login-error-msg">Credenciais inválidas. Tente novamente.</span>
 </div>
 <!-- Remember & Logic -->
 <div class="flex items-center justify-between">
 <label class="flex items-center cursor-pointer group">
 <div class="relative">
-<input class="sr-only peer" type="checkbox"/>
+<input id="remember" class="sr-only peer" type="checkbox"/>
 <div class="w-10 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </div>
 <span class="ml-3 text-sm font-medium text-on-surface-variant group-hover:text-on-surface transition-colors">Lembrar deste dispositivo</span>

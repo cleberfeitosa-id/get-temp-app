@@ -89,13 +89,14 @@
 <body class="text-on-background selection:bg-primary-container selection:text-on-primary-container">
 <!-- TopAppBar -->
 
-<main class="max-w-xl mx-auto px-6 pt-8 pb-32">
+<!-- ===== STEP 1: Identification ===== -->
+<main id="step1" class="max-w-xl mx-auto px-6 pt-8 pb-32">
 <!-- Step Indicator -->
 <div class="mb-10">
 <div class="flex items-end justify-between mb-4">
 <div>
-<span class="font-headline font-bold text-primary text-sm uppercase tracking-widest block mb-1">Etapa 1 de 3</span>
-<h2 class="font-headline font-bold text-3xl text-on-surface">Identificação</h2>
+<span id="step-label" class="font-headline font-bold text-primary text-sm uppercase tracking-widest block mb-1">Etapa 1 de 3</span>
+<h2 id="step-title" class="font-headline font-bold text-3xl text-on-surface">Identificação</h2>
 </div>
 <div class="flex gap-1.5 mb-2">
 <div class="h-1.5 w-12 rounded-full bg-primary"></div>
@@ -110,7 +111,7 @@
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 <!-- Nome da Câmara -->
 <div class="md:col-span-2 group">
-<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="chamber_name">Nome da Câmara</label>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="chamber_name">Nome da Câmara *</label>
 <div class="relative">
 <input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant" id="chamber_name" placeholder="Ex: Freezer B - Laboratório" type="text"/>
 <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">shelves</span>
@@ -118,7 +119,7 @@
 </div>
 <!-- Localização -->
 <div class="group">
-<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="location">Localização</label>
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="location">Localização *</label>
 <div class="relative">
 <input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant" id="location" placeholder="Ex: Doca 04" type="text"/>
 <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">location_on</span>
@@ -138,7 +139,7 @@
 </div>
 </div>
 </div>
-<!-- Limit Settings (The Atmospheric Gauge/Slider Style) -->
+<!-- Limit Settings with Real Sliders -->
 <div class="bg-surface-container-low rounded-lg p-6 space-y-8">
 <div class="flex items-center gap-3">
 <div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
@@ -150,49 +151,119 @@
 </div>
 </div>
 <div class="space-y-10 px-2">
-<!-- Temperatura Mínima -->
+<!-- Temperatura Mínima Slider -->
 <div class="relative">
 <div class="flex justify-between items-center mb-3">
-<label class="text-sm font-semibold text-on-surface-variant">Temperatura Mínima</label>
-<span class="font-headline font-bold text-primary text-xl">-25°C</span>
+<label class="text-sm font-semibold text-on-surface-variant" for="temp-min-slider">Temperatura Mínima</label>
+<span id="temp-min-display" class="font-headline font-bold text-primary text-xl">-25°C</span>
 </div>
-<div class="relative h-2 w-full bg-surface-container-highest rounded-full">
-<div class="absolute left-0 top-0 h-full w-1/4 bg-primary rounded-full"></div>
-<div class="absolute left-1/4 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-4 border-primary shadow-lg rounded-full cursor-pointer active:scale-125 transition-transform"></div>
-</div>
+<input id="temp-min-slider" type="range" min="-40" max="0" value="-25" step="1" class="w-full h-2 bg-surface-container-highest rounded-full appearance-none cursor-pointer accent-primary"/>
 <div class="flex justify-between mt-2 text-[10px] text-outline uppercase tracking-widest font-bold">
-<span>-40°C</span>
-<span>0°C</span>
+<span>-40°C</span><span>0°C</span>
 </div>
 </div>
-<!-- Temperatura Máxima -->
+<!-- Temperatura Máxima Slider -->
 <div class="relative">
 <div class="flex justify-between items-center mb-3">
-<label class="text-sm font-semibold text-on-surface-variant">Temperatura Máxima</label>
-<span class="font-headline font-bold text-secondary text-xl">-15°C</span>
+<label class="text-sm font-semibold text-on-surface-variant" for="temp-max-slider">Temperatura Máxima</label>
+<span id="temp-max-display" class="font-headline font-bold text-secondary text-xl">-15°C</span>
 </div>
-<div class="relative h-2 w-full bg-surface-container-highest rounded-full">
-<div class="absolute left-0 top-0 h-full w-[40%] bg-secondary-container rounded-full"></div>
-<div class="absolute left-[40%] top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-4 border-secondary shadow-lg rounded-full cursor-pointer active:scale-125 transition-transform"></div>
-</div>
+<input id="temp-max-slider" type="range" min="-40" max="0" value="-15" step="1" class="w-full h-2 bg-surface-container-highest rounded-full appearance-none cursor-pointer accent-secondary"/>
 <div class="flex justify-between mt-2 text-[10px] text-outline uppercase tracking-widest font-bold">
-<span>-40°C</span>
-<span>0°C</span>
+<span>-40°C</span><span>0°C</span>
 </div>
 </div>
 </div>
 </div>
 </section>
-<!-- Fixed Action Button (Suppressed as per rules for sub-pages, using standard footer button) -->
-<div class="fixed bottom-0 left-0 w-full p-6 bg-white/60 backdrop-blur-xl border-t border-white/20 z-40">
-<div class="max-w-xl mx-auto">
-<button class="w-full bg-primary text-white font-headline font-bold py-5 rounded-full shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all">
-<span>PRÓXIMO</span>
+</main>
+
+<!-- ===== STEP 2: Network Config (hidden by default) ===== -->
+<div id="step2" class="hidden max-w-xl mx-auto px-6 pt-8 pb-32">
+<div class="mb-10">
+<div class="flex items-end justify-between mb-4">
+<div>
+<span class="font-headline font-bold text-primary text-sm uppercase tracking-widest block mb-1">Etapa 2 de 3</span>
+<h2 class="font-headline font-bold text-3xl text-on-surface">Configuração de Rede</h2>
+</div>
+<div class="flex gap-1.5 mb-2">
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-12 rounded-full bg-primary"></div>
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm">Configure a conexão de rede do dispositivo IoT (ESP32).</p>
+</div>
+<div class="space-y-6">
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="device_ip">Endereço IP do Dispositivo *</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant font-mono" id="device_ip" placeholder="Ex: 192.168.1.100" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">router</span>
+</div>
+</div>
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="device_id_input">ID do Dispositivo *</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant font-mono" id="device_id_input" placeholder="Ex: CAM03" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">memory</span>
+</div>
+</div>
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-tighter mb-2 ml-1" for="mqtt_topic">Tópico MQTT (opcional)</label>
+<div class="relative">
+<input class="w-full bg-surface-container-low border-none rounded-xl px-5 py-4 text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline-variant font-mono" id="mqtt_topic" placeholder="coldchain/readings/CAM03" type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-primary transition-colors">cell_tower</span>
+</div>
+</div>
+<div class="bg-primary-container/20 rounded-xl p-4 flex gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">info</span>
+<p class="text-sm text-on-surface-variant leading-relaxed">Certifique-se que o ESP32 está conectado à mesma rede Wi-Fi e com o firmware correto instalado.</p>
+</div>
+</div>
+</div>
+
+<!-- ===== STEP 3: Confirmation (hidden by default) ===== -->
+<div id="step3" class="hidden max-w-xl mx-auto px-6 pt-8 pb-32">
+<div class="mb-10">
+<div class="flex items-end justify-between mb-4">
+<div>
+<span class="font-headline font-bold text-primary text-sm uppercase tracking-widest block mb-1">Etapa 3 de 3</span>
+<h2 class="font-headline font-bold text-3xl text-on-surface">Confirmação</h2>
+</div>
+<div class="flex gap-1.5 mb-2">
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-6 rounded-full bg-surface-container-highest"></div>
+<div class="h-1.5 w-12 rounded-full bg-primary"></div>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm">Revise os dados antes de registrar a câmara.</p>
+</div>
+<div id="confirm-summary" class="space-y-4">
+<!-- Populated by JS -->
+</div>
+<div id="step3-success" class="hidden flex-col items-center py-10 text-center">
+<div class="w-20 h-20 rounded-full bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
+<span class="material-symbols-outlined text-white text-4xl" style="font-variation-settings:'FILL' 1">check_circle</span>
+</div>
+<h3 class="font-headline font-bold text-2xl text-on-surface mb-2">Câmara Registrada!</h3>
+<p class="text-on-surface-variant text-sm mb-6">A câmara foi salva com sucesso no sistema.</p>
+<button onclick="window.location.href='index.html'" class="px-8 py-3 bg-primary text-white font-bold rounded-full shadow-md hover:opacity-90 transition-opacity">Ir para o Dashboard</button>
+</div>
+</div>
+
+<!-- Fixed Action Button -->
+<div class="fixed bottom-[88px] left-0 w-full p-6 bg-white/60 backdrop-blur-xl border-t border-white/20 z-40">
+<div class="max-w-xl mx-auto flex gap-3">
+<button id="btn-back" class="hidden px-6 py-5 rounded-full border border-outline-variant text-on-surface font-bold hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button id="btn-next" class="flex-1 bg-primary text-white font-headline font-bold py-5 rounded-full shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all">
+<span id="btn-next-label">PRÓXIMO</span>
 <span class="material-symbols-outlined">chevron_right</span>
 </button>
 </div>
 </div>
-</main>
 <!-- Navigation Suppressed for Focused Task (New Chamber Registration) as per Shell Visibility Rule -->
 <script type="module" src="/src/main.ts"></script>
 </body></html>

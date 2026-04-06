@@ -64,9 +64,9 @@ gettemp_app_ts/
 ├── analise.html                   ← Análise Temporal com Filtros
 ├── relatorios.html                ← Geração e Export de Relatórios
 ├── detalhes_camara.html           ← Detalhe por Câmara (via ?id=CAM01)
-├── ajustes.html                   ← Configurações e Perfil
+├── ajustes.html                   ← Configurações, Perfil e Gestão de Câmaras
 ├── historico_alertas.html         ← Feed de Alertas
-├── nova_camara.html               ← Formulário Multipassos (Etapa 1/3)
+├── nova_camara.html               ← Formulário de Cadastro/Edição de Câmara
 ├── visualizacao_relatorio.html    ← Preview de Relatório Gerado
 ├── login.html                     ← Tela de Login
 ├── vite.config.ts                 ← Configuração MPA do Vite
@@ -83,11 +83,11 @@ gettemp_app_ts/
 | Análise | `/analise` | ✅ Funcional | ✅ Filtros & PDF |
 | Relatórios | `/relatorios` | ✅ Funcional | ✅ CSV/JSON/PDF |
 | Detalhes Câmara | `/detalhes_camara?id=CAM01` | ✅ Funcional | ✅ Gráfico + Logs |
-| Ajustes | `/ajustes` | ⚠️ Parcial | ❌ Estático |
-| Histórico Alertas | `/historico_alertas` | ⚠️ Parcial | ❌ Estático |
-| Nova Câmara | `/nova_camara` | ⚠️ Parcial | ❌ Formulário sem submit |
-| Visualização Relatório | `/visualizacao_relatorio` | ⚠️ Parcial | ❌ Estático |
-| Login | `/login` | ⚠️ Parcial | ❌ Sem autenticação |
+| Ajustes | `/ajustes` | ✅ Funcional | ✅ Câmaras, Perfil, Notificações |
+| Histórico Alertas | `/historico_alertas` | ✅ Funcional | ✅ Feed dinâmico |
+| Nova Câmara | `/nova_camara` | ✅ Funcional | ✅ CRUD de câmaras |
+| Visualização Relatório | `/visualizacao_relatorio` | ✅ Funcional | ✅ Dados reais + Empresa |
+| Login | `/login` | ✅ Funcional | ✅ Autenticação mock |
 
 ---
 
@@ -100,6 +100,7 @@ gettemp_app_ts/
 - Barra de progresso por câmara
 - Navegação para `/detalhes_camara?id=<device_id>`
 - Bottom NavBar e Top AppBar injetados via `main.ts`
+- Avatar do perfil com iniciais dinâmicas no header
 
 ### ✅ Análise (`analise.html`)
 - Dropdown de seleção de câmara populado dinamicamente com IDs do mock
@@ -126,11 +127,42 @@ gettemp_app_ts/
 - Gráfico SVG de linha calculado sobre todos os registros da câmara
 - Logs Recentes com timestamp, status e temperatura reais (em ordem reversa)
 
+### ✅ Login (`login.html`)
+- Autenticação mock com email `admin@gettemp.io` e senha `gettemp123`
+- Token armazenado em localStorage
+- Proteção de rotas (páginas bloqueadas sem autenticação)
+- Redirecionamento pós-login para dashboard
+
 ### ✅ Ajustes (`ajustes.html`)
-- Toggles de notificação com feedback visual via toast nativo
-- Botão "Editar Perfil" → placeholder (alert)
-- Botão "Sair" → redireciona para `/login`
-- Botão "Nova Câmara" → redireciona para `/nova_camara`
+- **Gestão de Câmaras**: lista dinâmica de câmaras registradas
+- **Criar Câmara**: botão "Nova Câmara" abre formulário multipassos
+- **Editar Câmara**: menu de contexto (⋮) com opção de edição
+- **Remover Câmara**: exclusão com animação e atualização do localStorage
+- **Editar Perfil**: modal com campos de Nome, Email, Cargo, Empresa, Localização e CNPJ
+- **Dados da Empresa**: salvos em localStorage e exibidos nos relatórios
+- **Preferências de Notificação**: toggles com persistência em localStorage
+- **Avatar do Perfil**: iniciais dinâmicas no header, clicável para ajustes
+- **Logout**: botão "Sair" remove token e redireciona para login
+
+### ✅ Nova Câmara (`nova_camara.html`)
+- Formulário multipassos (3 etapas): Identificação → Rede → Confirmação
+- **Validação de campos obrigatórios**: Nome, Localização, IP, ID do dispositivo
+- **Sliders de temperatura**: Min/Max com feedback visual em tempo real
+- **Modo de Edição**: pré-popula formulário com dados existentes via `?edit=<device_id>`
+- **Persistência**: dados salvos em localStorage (key: `gettemp_cameras`)
+- **Feedback visual**: mensagem de sucesso personalizada para criação/edição
+
+### ✅ Visualização de Relatório (`visualizacao_relatorio.html`)
+- Dados dinâmicos populados do mock com filtros por câmara
+- Estatísticas (Máx, Mín, Média) calculadas em tempo real
+- Gráfico de barras com indicador de temperatura média
+- **Informações da Empresa**: exibidas no relatório (nome, localização, CNPJ)
+- Exporto via `window.print()` para PDF
+
+### ✅ Histórico de Alertas (`historico_alertas.html`)
+- Feed dinâmico filtrado por alertas (temp >= -15 ou Disconnected)
+- Busca por texto
+- Filtros por categoria (Todos / Temperatura / Offline)
 
 ---
 
@@ -138,56 +170,49 @@ gettemp_app_ts/
 
 ### 🔴 Crítico (Bloqueia Lançamento)
 
-#### `login.html` — Tela de Login
-- [ ] **Botão "Entrar"**: sem lógica de autenticação real. Atualmente não faz nada.
-- [ ] **Campo E-mail e Senha**: sem validação de formulário
-- [ ] **Integração de Auth**: conectar a um provider (Firebase Auth, Supabase, ou JWT simples)
-- [ ] **Redirecionamento pós-login**: redirecionar para `index.html` após autenticação bem-sucedida
-- [ ] **Proteção de Rotas**: bloquear acesso a páginas protegidas sem token de sessão
+#### Autenticação Real
+- [ ] Substituir autenticação mock por Firebase Auth, Supabase ou JWT
+- [ ] Implementar logout completo com invalidação de token
+- [ ] Adicionar recuperação de senha
 
-#### `nova_camara.html` — Formulário de Cadastro
-- [ ] **Botão "PRÓXIMO"**: sem lógica de navegação entre etapas (Etapa 1 de 3 visível, mas etapas 2 e 3 inexistentes)
-- [ ] **Etapa 2 e Etapa 3**: telas de configuração de rede e confirmação não criadas
-- [ ] **Sliders de Temperatura Min/Max**: atualmente são elementos HTML estáticos (sem evento `input`)
-- [ ] **Persistência de Dados**: submissão do formulário não persiste nada (sem API / localStorage)
-- [ ] **Validação**: formulário sem validação de campos obrigatórios
+#### Backend e Persistência
+- [ ] Substituir localStorage por API REST ou GraphQL
+- [ ] Migrar dados mock para banco de dados (PostgreSQL/MongoDB)
+- [ ] Implementar sync em tempo real entre dispositivos
+
+#### Integração MQTT
+- [ ] Configurar broker MQTT (HiveMQ, EMQX, ou similar)
+- [ ] Implementar subscriber no frontend
+- [ ] Validar formato de mensagens ESP32
 
 ### 🟠 Alta Prioridade
 
-#### `historico_alertas.html` — Feed de Alertas
-- [ ] **Dados Estáticos**: todos os cards de alertas são HTML fixo. Precisam ser populados do mock (ou MQTT)
-- [ ] **Barra de busca**: campo de texto presente mas sem listener de `input`
-- [ ] **Filtros de Categoria** ("Tudo" / "Críticos" / "Avisos"): botões sem listener de click
-- [ ] **Botão "Filtrar"**: ícone de filtro sem funcionalidade de filtro avançado
-- [ ] **Ação nos cards**: nenhum card de alerta é clicável ou navegável para detalhe
+#### UX/UI
+- [ ] Tela de onboarding para primeiro acesso
+- [ ] Tutorial interativo de uso do dashboard
+- [ ] Modo offline com dados em cache
 
-#### `visualizacao_relatorio.html` — Preview de Relatório
-- [ ] **Dados Estáticos**: todo o conteúdo (temperatura, datas, tabela semanal) é hardcoded
-- [ ] **Botão "Baixar PDF"**: presente mas sem event listener — não dispara nenhuma ação
-- [ ] **Botão "E-mail"**: presente mas sem funcionalidade (requer integração com backend de e-mail)
-- [ ] **Paginação**: exibe "PÁGINA 1 DE 12" mas sem lógica de páginas
-- [ ] **Binding com relatório gerado**: página deveria receber o relatório selecionado via query param ou state
+#### Relatórios
+- [ ] Agendamento de relatórios recorrentes (daily/weekly)
+- [ ] Envio de relatórios por email automaticamente
+- [ ] Templates de relatório customizáveis
 
-#### `ajustes.html` — Configurações Avançadas
-- [ ] **Câmaras Registradas**: cards de câmara (Congelador A, Refrigerador B, etc.) são estáticos e não refletem o mock
-- [ ] **Botão "Mais" (⋮) nos cards de câmara**: sem menu de contexto (editar, remover)
-- [ ] **Editar Perfil**: atualmente exibe apenas um `alert()` placeholder; deveria abrir formulário real
-- [ ] **Persistência de Preferências de Notificação**: estado dos toggles não é salvo entre sessões
+#### Notificações
+- [ ] Notificações push via Service Worker
+- [ ] Integração com SMS (Twilio)
+- [ ] Webhooks para integração com sistemas externos
 
 ### 🟡 Médio Prazo
 
-#### `analise.html` — Melhorias de UX
-- [ ] **Seleção "Todas as Câmaras"**: opção "ALL" no dropdown não exibe um gráfico consolidado unificado
-- [ ] **Gráfico com Eixos e Labels**: o gráfico SVG atual não exibe legendas de temperatura ou timestamps nos eixos
-- [ ] **Cards de Alerta Clicáveis**: logs de alerta poderiam navegar para detalhe da câmara correspondente
+#### Analytics
+- [ ] Gráfico consolidado "Todas as Câmaras"
+- [ ] Previsão de manutenção preditiva
+- [ ] Dashboard executivo com KPIs
 
-#### `detalhes_camara.html` — Melhorias
-- [ ] **Botão de ações (editar câmara)**: cabeçalho da página pode ter botão de ação adicional
-- [ ] **Seletor de Período no Detalhe**: gráfico exibe todos os registros sem filtro de período
-
-#### `relatorios.html` — Melhorias
-- [ ] **Visualizar Relatório**: botão que navega para `visualizacao_relatorio` mostrando o relatório gerado
-- [ ] **Download de Relatórios Recentes**: ícone de download no hover dos "Relatórios Recentes" não dispara download real
+#### Segurança
+- [ ] Autenticação em dois fatores (2FA)
+- [ ] Logs de auditoria
+- [ ] Criptografia de dados sensíveis
 
 ---
 
@@ -204,6 +229,7 @@ gettemp_app_ts/
 - [ ] Bottom NavBar em todas as telas navega corretamente entre Status / Análise / Relatórios / Ajustes
 - [ ] Seta de voltar no header retorna à tela anterior corretamente
 - [ ] Item ativo do NavBar fica destacado na tela atual
+- [ ] Avatar do perfil no header navega para `/ajustes`
 
 ### 📊 Dashboard (`/`)
 
@@ -251,11 +277,19 @@ gettemp_app_ts/
 
 ### ⚙️ Ajustes (`/ajustes`)
 
+- [ ] Lista de câmaras é exibida dinamicamente
+- [ ] Câmaras do localStorage aparecem na lista
+- [ ] Câmaras do mock aparecem na lista
 - [ ] Toggle de "Alertas de Temperatura Crítica" exibe toast quando alterado
 - [ ] Toggle de "Resumos Diários" exibe toast quando alterado
-- [ ] Botão "Editar Perfil" exibe mensagem de funcionalidade futura
+- [ ] Estado dos toggles persiste após reload da página
+- [ ] Botão "Editar Perfil" abre modal com campos preenchidos
+- [ ] Salvar perfil atualiza nome no header e dados da empresa nos relatórios
 - [ ] Botão "Sair" redireciona para `/login`
 - [ ] Botão "Nova Câmara" redireciona para `/nova_camara`
+- [ ] Menu de contexto (⋮) aparece ao clicar
+- [ ] Opção "Editar câmara" navega para `/nova_camara?edit=<id>`
+- [ ] Opção "Remover câmara" exclui a câmara com animação
 
 ### 📱 Responsividade e Acessibilidade
 

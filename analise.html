@@ -144,16 +144,12 @@
 </defs>
 <path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10 L 400 100 L 0 100 Z" fill="url(#chartGradient)"></path>
 <path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10" fill="none" stroke="white" stroke-linecap="round" stroke-width="3"></path>
-<circle cx="220" cy="30" fill="#ffb702" r="4"></circle>
-<text fill="white" font-family="Space Grotesk" font-size="6" text-anchor="middle" x="220" y="20">PICO 3.1°C</text>
+<circle id="chart-peak-circle" cx="0" cy="0" fill="#ffb702" r="4" class="transition-all duration-300"></circle>
+<text id="chart-peak-text" fill="white" font-family="Space Grotesk" font-size="6" text-anchor="middle" x="0" y="0" class="transition-all duration-300 text-[10px] uppercase font-bold tracking-widest">PICO</text>
 </svg>
 </div>
-<div class="flex justify-between text-on-primary/50 text-xs font-bold font-label tracking-widest uppercase mt-4">
-<span>00:00</span>
-<span>06:00</span>
-<span>12:00</span>
-<span>18:00</span>
-<span>23:59</span>
+<div id="chart-x-axis" class="flex justify-between text-on-primary/50 text-[10px] font-bold font-label tracking-widest uppercase mt-4">
+<!-- Injetado dinamicamente -->
 </div>
 </div>
 <!-- Stats Cards Column -->
@@ -196,10 +192,6 @@
 <h3 class="font-headline text-2xl font-bold text-on-background">Log de Limites de Alerta</h3>
 <p class="text-on-surface-variant text-sm">Violações históricas de limites de segurança</p>
 </div>
-<button class="text-primary font-bold text-sm flex items-center gap-1 hover:underline">
-                        Baixar PDF
-                        <span class="material-symbols-outlined text-sm" data-icon="download">download</span>
-</button>
 </div>
 <div class="space-y-4">
 <!-- Log Item 1 -->

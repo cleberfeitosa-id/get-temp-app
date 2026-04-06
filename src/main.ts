@@ -11,9 +11,9 @@ const HeaderHTML = `
     </button>
     <span class="text-xl font-bold text-sky-900 font-['Space_Grotesk'] tracking-tight text-2xl">Get Temp</span>
   </div>
-  <div class="flex items-center">
-    <div class="w-10 h-10 rounded-full bg-sky-200 flex items-center justify-center text-sky-900 font-bold text-xs border-2 border-white shadow-sm">TS</div>
-  </div>
+  <button id="header-profile-btn" onclick="window.location.href='ajustes.html'" class="w-11 h-11 rounded-full bg-sky-200 flex items-center justify-center text-sky-900 font-bold text-sm border-2 border-white shadow-sm cursor-pointer hover:bg-sky-300 hover:scale-105 transition-all duration-200" title="Acessar perfil">
+    <span id="header-avatar-initials">TS</span>
+  </button>
 </header>
 `;
 
@@ -42,7 +42,6 @@ const NavBarHTML = `
 document.addEventListener("DOMContentLoaded", () => {
   // Inject Header and Footer into body
   document.body.insertAdjacentHTML("afterbegin", HeaderHTML);
-  document.body.insertAdjacentHTML("beforeend", NavBarHTML);
 
   const currentPath = window.location.pathname;
 
@@ -51,6 +50,67 @@ document.addEventListener("DOMContentLoaded", () => {
     currentPath.endsWith(`/${name}.html`) ||
     currentPath.endsWith(`/${name}`) ||
     currentPath === `/${name}`;
+
+  if (!isPage('login') && !isPage('visualizacao_relatorio')) {
+      document.body.insertAdjacentHTML("beforeend", NavBarHTML);
+  }
+
+  // Simple Auth Protection
+  const token = localStorage.getItem('authToken');
+  const onLoginPage = isPage('login');
+  
+  if (!token && !onLoginPage) {
+    window.location.href = 'login.html';
+    return;
+  }
+  if (token && onLoginPage) {
+    window.location.href = 'index.html';
+    return;
+  }
+
+  // Update header avatar initials from saved profile
+  const savedName = localStorage.getItem('profile_name');
+  if (savedName) {
+    const initials = savedName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    setTimeout(() => {
+      const avatarEl = document.getElementById('header-avatar-initials');
+      if (avatarEl) avatarEl.textContent = initials;
+    }, 0);
+  }
+
+  // --- Auth Logic (Login) ---
+  if (onLoginPage) {
+    const loginForm = document.getElementById('login-form') as HTMLFormElement;
+    const errorMsg = document.getElementById('login-error');
+    const togglePwd = document.getElementById('toggle-password');
+    const pwdInput = document.getElementById('password') as HTMLInputElement;
+
+    if (togglePwd && pwdInput) {
+      togglePwd.addEventListener('click', () => {
+        const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        pwdInput.setAttribute('type', type);
+        togglePwd.querySelector('span')!.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+      });
+    }
+
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = (document.getElementById('email') as HTMLInputElement).value;
+        const pwd = pwdInput.value;
+        const remember = (document.getElementById('remember') as HTMLInputElement).checked;
+
+        if (email === 'admin@gettemp.io' && pwd === 'gettemp123') {
+           if (remember) localStorage.setItem('authToken', 'demo-token-123');
+           else sessionStorage.setItem('authToken', 'demo-token-123'); // Fallback if not persisting, but simplify for demo:
+           localStorage.setItem('authToken', 'demo-token-123'); // Just use local storage for demo
+           window.location.href = 'index.html';
+        } else {
+           if (errorMsg) errorMsg.classList.remove('hidden');
+        }
+      });
+    }
+  }
 
   // Change Header icon to back arrow if not on index
   if (!isPage('index') && currentPath !== '/') {
@@ -232,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const points = filtered.map((r: SensorReading, idx: number) => {
              const x = (idx / (filtered.length - 1 || 1)) * svgWidth;
              const y = svgHeight - ((r.temp - minTemp) / range) * svgHeight;
-             return {x, y};
+             return {x, y, temp: r.temp};
           });
           let pathD = `M ${points[0].x} ${points[0].y} `;
           for(let i = 1; i < points.length; i++) pathD += `L ${points[i].x} ${points[i].y} `;
@@ -242,6 +302,44 @@ document.addEventListener("DOMContentLoaded", () => {
           if (paths && paths.length >= 2) {
              paths[0].setAttribute('d', fillD);
              paths[1].setAttribute('d', pathD);
+          }
+
+          // Anchor dynamic Peak Tooltip Coordinate
+          const peakIdx = points.findIndex(p => p.temp === maxTemp);
+          const peakPt = points[peakIdx !== -1 ? peakIdx : 0];
+          
+          const pCircle = document.getElementById('chart-peak-circle');
+          const pText = document.getElementById('chart-peak-text');
+          
+          if (pCircle) {
+             pCircle.setAttribute('cx', peakPt.x.toFixed(1));
+             pCircle.setAttribute('cy', peakPt.y.toFixed(1));
+          }
+          if (pText) {
+             // Avoid clipping on SVG edges
+             let textX = peakPt.x;
+             if (textX < 20) textX = 20;
+             if (textX > svgWidth - 20) textX = svgWidth - 20;
+
+             pText.setAttribute('x', textX.toFixed(1));
+             pText.setAttribute('y', (peakPt.y - 10).toFixed(1));
+             pText.textContent = `PICO ${maxTemp.toFixed(1)}°C`;
+          }
+
+          // Generate dynamic X Axis
+          const xAxisEl = document.getElementById('chart-x-axis');
+          if (xAxisEl) {
+             if (currentDays === 1) {
+                 xAxisEl.innerHTML = `<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span>`;
+             } else {
+                 let labels = '';
+                 for(let i=0; i<5; i++){
+                    const dt = new Date();
+                    dt.setDate(dt.getDate() - currentDays + 1 + Math.floor((currentDays-1) * (i / 4)));
+                    labels += `<span>${dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>`;
+                 }
+                 xAxisEl.innerHTML = labels;
+             }
           }
 
           // Populate Alert Logs
@@ -318,51 +416,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             });
 
-            // Target Context PDF Export for Alert Log
-            const pdfBtns = document.querySelectorAll('button');
-            pdfBtns.forEach(btn => {
-                if (btn.textContent && btn.textContent.includes('Baixar PDF')) {
-                    btn.addEventListener('click', () => {
-                        const alertHtml = document.querySelector('.space-y-4')?.outerHTML || '';
-                        
-                        const printWindow = window.open('', '_blank');
-                        if (printWindow) {
-                            printWindow.document.write(`
-                                <html>
-                                <head>
-                                    <title>Relatório Especializado de Alertas - Get Temp</title>
-                                    <script src="https://cdn.tailwindcss.com"></script>
-                                    <style>
-                                        body { padding: 40px; font-family: sans-serif; }
-                                        h1 { color: #006399; font-size: 24px; margin-bottom: 5px; }
-                                        p { color: #555; font-size: 14px; margin-bottom: 20px;}
-                                        .report-meta { border-bottom: 2px solid #006399; margin-bottom: 20px; padding-bottom: 10px; }
-                                    </style>
-                                </head>
-                                <body>
-                                    <div class="report-meta">
-                                        <h1>Relatório de Desvios Térmicos</h1>
-                                        <p>Gerado em: ${new Date().toLocaleString()}</p>
-                                        <p>Filtros Ativos: Câmara = ${currentChamber}, Período = ${currentDays} dias úteis</p>
-                                    </div>
-                                    <div style="margin-top:20px;">
-                                        ${alertHtml}
-                                    </div>
-                                    <script>
-                                        // Wait for Tailwind scripts to load roughly before printing natively
-                                        setTimeout(() => {
-                                            window.print();
-                                            window.close();
-                                        }, 1000);
-                                    </script>
-                                </body>
-                                </html>
-                            `);
-                            printWindow.document.close();
-                        }
-                    });
-                }
-            });
 
             // Initial Render
             renderAnalytics();
@@ -371,7 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Phase 7: Comprehensive Dynamic Reports Export
   if (isPage('relatorios')) {
-     let selectedFormat = 'CSV';
+     let selectedFormat = 'PDF';
      let selectedType = 'Resumo Semanal';
      
      // Bind active format toggles (PDF / CSV / JSON)
@@ -423,99 +476,150 @@ document.addEventListener("DOMContentLoaded", () => {
          if (eDateInput) eDateInput.value = fmtDate(maxDate);
 
          // Sync Recent Reports Sidebar dynamically
-         const recentsContainer = document.getElementById('recent-reports-container');
-         if (recentsContainer) {
-             recentsContainer.innerHTML = '';
-             const mSize = data.length * 12; // fake size bytes
-             
-             const reports = [
-                 { title: `Auditoria_${fmtDate(maxDate).replace(/ /g,'')}.pdf`, icon: 'picture_as_pdf', color: 'text-tertiary', bg: 'bg-tertiary-container/30', desc: `Gerado Hoje • ${(mSize * 2.3 / 1024).toFixed(1)} MB`},
-                 { title: `Historico_${fmtDate(maxDate).replace(/ /g,'')}.csv`, icon: 'table_chart', color: 'text-primary', bg: 'bg-primary-container/30', desc: `Gerado Ontem • ${mSize} KB`},
-                 { title: `Resumo_${fmtDate(minDate).replace(/ /g,'')}.pdf`, icon: 'picture_as_pdf', color: 'text-secondary', bg: 'bg-secondary-container/30', desc: `Gerado em ${fmtDate(minDate)} • ${(mSize * 1.5 / 1024).toFixed(1)} MB`}
-             ];
+         const renderRecentReports = () => {
+            const recentsContainer = document.getElementById('recent-reports-container');
+            if(!recentsContainer) return;
+            recentsContainer.innerHTML = '';
+            let recents = JSON.parse(localStorage.getItem('gettemp_recent_reports') || '[]');
+            if (recents.length === 0) {
+               recentsContainer.innerHTML = '<p class="text-xs text-outline/50 italic">Nenhum relatório foi emitido no seu histórico local.</p>';
+               return;
+            }
+            
+            recents.forEach((rp: any) => {
+                const dtObj = new Date(rp.date);
+                const dt = dtObj.toLocaleDateString('pt-BR');
+                const time = dtObj.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+                const icon = rp.format === 'PDF' ? 'picture_as_pdf' : (rp.format === 'CSV' ? 'table_chart' : 'data_object');
+                const color = rp.format === 'PDF' ? 'text-secondary' : 'text-primary';
+                const bg = rp.format === 'PDF' ? 'bg-secondary-container/30' : 'bg-primary-container/30';
+                const title = `${rp.type.split(' ')[0]}_${dt.replace(/\//g,'')}.${rp.format.toLowerCase()}`;
+                
+                const cLabel = rp.cams.includes('ALL') ? 'Todas Câmaras' : `${rp.cams.length} Câm.`;
+                
+                const btnId = `btn-rc-${rp.id}`;
+                recentsContainer.insertAdjacentHTML('beforeend', `
+                   <div id="${btnId}" class="bg-white/40 border border-white/50 p-4 rounded-lg flex items-center gap-4 group hover:bg-white transition-colors cursor-pointer shadow-sm">
+                       <div class="w-12 h-12 rounded-md ${bg} flex items-center justify-center ${color}">
+                           <span class="material-symbols-outlined">${icon}</span>
+                       </div>
+                       <div class="flex-1 overflow-hidden">
+                           <h4 class="font-headline text-[13px] font-bold truncate text-on-surface">${title}</h4>
+                           <span class="text-[10px] text-on-surface-variant font-medium">${dt} ${time} • ${cLabel}</span>
+                       </div>
+                       <button class="opacity-0 group-hover:opacity-100 transition-opacity text-primary">
+                           <span class="material-symbols-outlined">refresh</span>
+                       </button>
+                   </div>`);
+                
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                   btn.addEventListener('click', () => {
+                      if (rp.format === 'PDF') {
+                          window.location.href = `visualizacao_relatorio.html?type=${encodeURIComponent(rp.type)}&cams=${rp.cams.join(',')}&graphs=${rp.graphs}&logs=${rp.logs}`;
+                      } else {
+                          alert(`Re-emitir o arquivo bruto ${rp.format} requer conexão ao Banco de Dados (Offline Mock)`);
+                      }
+                   });
+                }
+            });
+         };
+         
+         const saveRecentReport = (type: string, format: string, cams: string[], graphs: boolean, logs: boolean) => {
+             let recents = JSON.parse(localStorage.getItem('gettemp_recent_reports') || '[]');
+             recents.unshift({ id: Date.now(), type, format, cams, graphs, logs, date: new Date().toISOString() });
+             if(recents.length > 5) recents = recents.slice(0, 5); // Keep last 5
+             localStorage.setItem('gettemp_recent_reports', JSON.stringify(recents));
+             renderRecentReports();
+         };
 
-             reports.forEach(rp => {
-                 recentsContainer.insertAdjacentHTML('beforeend', `
-                    <div class="bg-white/40 border border-white/50 p-4 rounded-lg flex items-center gap-4 group hover:bg-white transition-colors">
-                        <div class="w-12 h-12 rounded-md ${rp.bg} flex items-center justify-center ${rp.color}">
-                            <span class="material-symbols-outlined">${rp.icon}</span>
-                        </div>
-                        <div class="flex-1 overflow-hidden">
-                            <h4 class="font-headline text-sm font-bold truncate">${rp.title}</h4>
-                            <span class="text-[10px] text-on-surface-variant font-medium">${rp.desc}</span>
-                        </div>
-                        <button class="opacity-0 group-hover:opacity-100 transition-opacity text-primary">
-                            <span class="material-symbols-outlined">download</span>
-                        </button>
-                    </div>`);
-             });
+         renderRecentReports();
+         
+         // Dynamically populate Camera Picker Checkboxes
+         const camFilterContainer = document.getElementById('camera-filter-container');
+         if (camFilterContainer) {
+            camFilterContainer.innerHTML = '';
+            const devices = getUniqueDevices(data);
+            
+            camFilterContainer.insertAdjacentHTML('beforeend', `
+               <label class="flex items-center gap-3 py-2 cursor-pointer group">
+                  <input type="checkbox" value="ALL" checked class="cam-chk w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary transition-colors cursor-pointer checked:bg-primary" />
+                  <span class="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">Todas as Câmaras (Geral)</span>
+               </label>
+            `);
+            
+            devices.forEach(dev => {
+               const dRef = data.find((r: any) => r.device_id === dev);
+               const realName = dRef ? dRef.name : dev;
+               
+               camFilterContainer.insertAdjacentHTML('beforeend', `
+                  <label class="flex items-center gap-3 py-2 cursor-pointer group opacity-60 hover:opacity-100 transition-opacity">
+                     <input type="checkbox" value="${dev}" class="cam-chk w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary transition-colors cursor-pointer checked:bg-primary" />
+                     <span class="text-sm font-semibold text-on-surface-variant group-hover:text-primary">${realName}</span>
+                  </label>
+               `);
+            });
+            
+            const checks = document.querySelectorAll('.cam-chk') as NodeListOf<HTMLInputElement>;
+            const allCheck = checks[0];
+            
+            checks.forEach(chk => {
+               chk.addEventListener('change', (e) => {
+                  const target = e.target as HTMLInputElement;
+                  if (target.value === 'ALL') {
+                     if (target.checked) checks.forEach(c => { if(c.value !== 'ALL') { c.checked = false; c.parentElement?.classList.add('opacity-60'); }});
+                  } else {
+                     if (target.checked) {
+                        allCheck.checked = false;
+                        allCheck.parentElement?.classList.add('opacity-60');
+                        target.parentElement?.classList.remove('opacity-60');
+                     } else {
+                        target.parentElement?.classList.add('opacity-60');
+                     }
+                  }
+               });
+            });
          }
 
          // Generate Button Logics
-         const generateBtn = document.querySelector('button.bg-primary');
+         const generateBtn = document.getElementById('btn-generate-report');
          if (generateBtn) {
             generateBtn.addEventListener('click', () => {
-               const incGraphs = (document.getElementById('chk-graphs') as HTMLInputElement)?.checked;
-               const incLogs = (document.getElementById('chk-logs') as HTMLInputElement)?.checked;
+                const incGraphs = (document.getElementById('chk-graphs') as HTMLInputElement)?.checked || false;
+                const incLogs = (document.getElementById('chk-logs') as HTMLInputElement)?.checked || false;
+                
+                // Collect selected cameras
+                const camChecks = Array.from(document.querySelectorAll('.cam-chk')) as HTMLInputElement[];
+                let selectedCams = camChecks.filter(c => c.checked).map(c => c.value);
+                if (selectedCams.length === 0) selectedCams = ['ALL']; // fallback
+                
+                // Save to history
+                saveRecentReport(selectedType, selectedFormat, selectedCams, incGraphs, incLogs);
 
-               if (selectedFormat === 'PDF') {
-                   const printWindow = window.open('', '_blank');
-                   if (printWindow) {
-                       let bodyHtml = '';
-                       
-                       if (incGraphs) {
-                           bodyHtml += `<div class="section"><h3>Representação Gráfica</h3><div class="box">[Espaço Reservado para Rendering Dinâmico do Gráfico baseado no mock: ${data.length} entradas]</div></div>`;
-                       }
-                       if (incLogs) {
-                           const rows = data.map((d:any) => `<li>[${d.date} ${d.time}] ${d.name}: ${d.temp}°C (${d.connection})</li>`).join('');
-                           bodyHtml += `<div class="section"><h3>Logs de Câmaras</h3><ul>${rows}</ul></div>`;
-                       }
-
-                       printWindow.document.write(`
-                           <html>
-                           <head>
-                               <title>Documento Oficial - ${selectedType}</title>
-                               <style>
-                                   body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; }
-                                   h1 { color: #006399; font-size: 28px; border-bottom: 2px solid #006399; padding-bottom: 10px; }
-                                   h2 { font-size: 16px; color: #666; font-weight: normal; margin-bottom: 40px; }
-                                   h3 { color: #004b74; margin-top: 30px; }
-                                   .section { margin-bottom: 30px; }
-                                   .box { border: 2px dashed #ccc; padding: 30px; text-align: center; color: #888; background: #f9f9f9; }
-                                   ul { list-style: none; padding: 0; }
-                                   li { padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 12px; }
-                               </style>
-                           </head>
-                           <body>
-                               <h1>${selectedType}</h1>
-                               <h2>Baseado em Intervalo: ${fmtDate(minDate)} a ${fmtDate(maxDate)}</h2>
-                               <p>Total de entradas computadas: <strong>${data.length} registros</strong>.</p>
-                               ${bodyHtml}
-                               <p style="margin-top:50px; text-align:center; font-size:10px; color:#aaa;">Gerado pelo Sistema ColdChain Control via Impressão Nativa (Blob)</p>
-                               <script>
-                                   setTimeout(() => { window.print(); window.close(); }, 800);
-                               </script>
-                           </body>
-                           </html>
-                       `);
-                       printWindow.document.close();
-                   }
-                   return;
-               }
+                if (selectedFormat === 'PDF') {
+                    window.location.href = `visualizacao_relatorio.html?type=${encodeURIComponent(selectedType)}&graphs=${incGraphs}&logs=${incLogs}&cams=${selectedCams.join(',')}`;
+                    return;
+                }
                
                let contentText = '';
                let typeType = '';
                let extension = '';
                
+               // Applica Filtro de câmera antes de exportar
+               let exportData = data;
+               if (!selectedCams.includes('ALL')) {
+                   exportData = data.filter((d: any) => selectedCams.includes(d.device_id) || selectedCams.includes(d.name));
+               }
+
                if (selectedFormat === 'CSV') {
-                   const header = "device_id,name,temp,wifi_rssi,date,time,connection\\n";
-                   const rows = data.map((d: any) => `${d.device_id},${d.name},${d.temp},${d.wifi_rssi},${d.date},${d.time},${d.connection}`).join("\\n");
+                   const header = "device_id,name,temp,wifi_rssi,date,time,connection\n";
+                   const rows = exportData.map((d: any) => `${d.device_id},${d.name},${d.temp},${d.wifi_rssi},${d.date},${d.time},${d.connection}`).join("\n");
                    contentText = header + rows;
                    typeType = 'text/csv';
                    extension = 'csv';
                } else if (selectedFormat === 'JSON') {
                    // Inject configs meta for fun
-                   const payload = { type: selectedType, options: { graphs: incGraphs, logs: incLogs }, dataset: data };
+                   const payload = { type: selectedType, options: { graphs: incGraphs, logs: incLogs, cams: selectedCams }, dataset: exportData };
                    contentText = JSON.stringify(payload, null, 2);
                    typeType = 'application/json';
                    extension = 'json';
@@ -535,14 +639,498 @@ document.addEventListener("DOMContentLoaded", () => {
      });
   }
 
-  // Ajustes page interactive wiring
+  // --- Nova Câmara (Multi-step Form) ---
+  if (isPage('nova_camara')) {
+    let currentStep = 1;
+    const btnNext = document.getElementById('btn-next');
+    const btnNextLabel = document.getElementById('btn-next-label');
+    const btnBack = document.getElementById('btn-back');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+    const summary = document.getElementById('confirm-summary');
+    const success = document.getElementById('step3-success');
+
+    // Slider display updates
+    const tMinSlider = document.getElementById('temp-min-slider') as HTMLInputElement;
+    const tMinDisplay = document.getElementById('temp-min-display');
+    const tMaxSlider = document.getElementById('temp-max-slider') as HTMLInputElement;
+    const tMaxDisplay = document.getElementById('temp-max-display');
+
+    if (tMinSlider && tMinDisplay) tMinSlider.addEventListener('input', e => { tMinDisplay.textContent = (e.target as HTMLInputElement).value + '°C'; });
+    if (tMaxSlider && tMaxDisplay) tMaxSlider.addEventListener('input', e => { tMaxDisplay.textContent = (e.target as HTMLInputElement).value + '°C'; });
+
+    // Check if we're in edit mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const editDeviceId = urlParams.get('edit');
+    let isEditMode = false;
+
+    if (editDeviceId) {
+      isEditMode = true;
+      // Load existing device data from localStorage or from the readings
+      const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+      const existing = storedCameras[editDeviceId];
+
+      if (existing) {
+        (document.getElementById('chamber_name') as HTMLInputElement).value = existing.name || '';
+        (document.getElementById('location') as HTMLInputElement).value = existing.location || '';
+        if (existing.unit_type) (document.getElementById('unit_type') as HTMLSelectElement).value = existing.unit_type;
+        if (existing.temp_min) {
+          tMinSlider.value = existing.temp_min;
+          if (tMinDisplay) tMinDisplay.textContent = existing.temp_min + '°C';
+        }
+        if (existing.temp_max) {
+          tMaxSlider.value = existing.temp_max;
+          if (tMaxDisplay) tMaxDisplay.textContent = existing.temp_max + '°C';
+        }
+        (document.getElementById('device_ip') as HTMLInputElement).value = existing.ip || '';
+        (document.getElementById('device_id_input') as HTMLInputElement).value = existing.device_id || editDeviceId;
+        (document.getElementById('mqtt_topic') as HTMLInputElement).value = existing.mqtt_topic || '';
+      }
+
+      // Update page title for edit mode
+      const stepLabel = document.getElementById('step-label');
+      const stepTitle = document.querySelector('#step1 h2');
+      if (stepLabel) stepLabel.textContent = 'Modo de Edição';
+      if (stepTitle) stepTitle.textContent = 'Editar Câmara';
+
+      // Change submit button text
+      if (btnNextLabel) btnNextLabel.textContent = 'PRÓXIMO';
+    }
+
+    const updateView = () => {
+      [step1, step2, step3].forEach(s => s?.classList.add('hidden'));
+      btnBack?.classList.toggle('hidden', currentStep === 1);
+      
+      if (currentStep === 1) {
+        step1?.classList.remove('hidden');
+        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'PRÓXIMO' : 'PRÓXIMO';
+      } else if (currentStep === 2) {
+        step2?.classList.remove('hidden');
+        if (btnNextLabel) btnNextLabel.textContent = 'REVISAR';
+      } else if (currentStep === 3) {
+        step3?.classList.remove('hidden');
+        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'ATUALIZAR CÂMARA' : 'CONFIRMAR REGISTRO';
+        
+        // Populate summary
+        if (summary) {
+          const name = (document.getElementById('chamber_name') as HTMLInputElement).value;
+          const loc = (document.getElementById('location') as HTMLInputElement).value;
+          const min = tMinSlider.value;
+          const max = tMaxSlider.value;
+          const ip = (document.getElementById('device_ip') as HTMLInputElement).value;
+          const did = (document.getElementById('device_id_input') as HTMLInputElement).value;
+
+          summary.innerHTML = `
+            <div class="bg-surface-container-low p-4 rounded-xl">
+              <p class="text-xs text-on-surface-variant font-bold uppercase">Câmara</p>
+              <p class="font-bold text-on-surface">${name || 'Não informado'} (${loc || 'N/A'})</p>
+            </div>
+            <div class="bg-surface-container-low p-4 rounded-xl">
+              <p class="text-xs text-on-surface-variant font-bold uppercase">Limites</p>
+              <p class="font-bold text-on-surface">Min: ${min}°C | Máx: ${max}°C</p>
+            </div>
+            <div class="bg-surface-container-low p-4 rounded-xl">
+              <p class="text-xs text-on-surface-variant font-bold uppercase">Rede</p>
+              <p class="font-bold text-on-surface font-mono text-sm">IP: ${ip || 'N/A'} | ID: ${did || 'N/A'}</p>
+            </div>
+          `;
+        }
+      }
+    };
+
+    btnNext?.addEventListener('click', () => {
+      if (currentStep < 3) {
+        // Validate required fields before proceeding
+        if (currentStep === 1) {
+          const name = (document.getElementById('chamber_name') as HTMLInputElement).value.trim();
+          const location = (document.getElementById('location') as HTMLInputElement).value.trim();
+          if (!name) {
+            alert('Por favor, informe o nome da câmara.');
+            return;
+          }
+          if (!location) {
+            alert('Por favor, informe a localização da câmara.');
+            return;
+          }
+        }
+        if (currentStep === 2) {
+          const ip = (document.getElementById('device_ip') as HTMLInputElement).value.trim();
+          const did = (document.getElementById('device_id_input') as HTMLInputElement).value.trim();
+          if (!ip) {
+            alert('Por favor, informe o endereço IP do dispositivo.');
+            return;
+          }
+          if (!did) {
+            alert('Por favor, informe o ID do dispositivo.');
+            return;
+          }
+        }
+        currentStep++;
+        updateView();
+      } else {
+        // Submit - save camera data to localStorage
+        const name = (document.getElementById('chamber_name') as HTMLInputElement).value;
+        const loc = (document.getElementById('location') as HTMLInputElement).value;
+        const unitType = (document.getElementById('unit_type') as HTMLSelectElement).value;
+        const ip = (document.getElementById('device_ip') as HTMLInputElement).value;
+        const did = (document.getElementById('device_id_input') as HTMLInputElement).value || editDeviceId || 'CAM_NEW';
+        const mqttTopic = (document.getElementById('mqtt_topic') as HTMLInputElement).value;
+
+        const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+        storedCameras[did] = {
+          name, location: loc, unit_type: unitType,
+          temp_min: tMinSlider.value, temp_max: tMaxSlider.value,
+          ip, device_id: did, mqtt_topic: mqttTopic
+        };
+        localStorage.setItem('gettemp_cameras', JSON.stringify(storedCameras));
+
+        summary?.classList.add('hidden');
+        btnNext.parentElement?.classList.add('hidden');
+        success?.classList.remove('hidden');
+        success?.classList.add('flex');
+
+        if (success) {
+          const successTitle = success.querySelector('h3');
+          const successBtn = success.querySelector('button');
+          if (successTitle) successTitle.textContent = isEditMode ? 'Câmara Atualizada!' : 'Câmara Registrada!';
+          if (successBtn) successBtn.textContent = isEditMode ? 'Voltar para Ajustes' : 'Ir para o Dashboard';
+          if (successBtn) successBtn.onclick = () => { window.location.href = isEditMode ? 'ajustes.html' : 'index.html'; };
+        }
+      }
+    });
+
+    btnBack?.addEventListener('click', () => {
+      if (currentStep > 1) {
+        currentStep--;
+        updateView();
+      }
+    });
+
+    updateView();
+  }
+
+  // --- Historico de Alertas ---
+  if (isPage('historico_alertas')) {
+    getReadings().then(data => {
+      if (!data) return;
+      // Get only disconnected or temp > -15
+      const alerts = data.filter(r => r.temp >= -15 || r.connection === 'Disconnected').reverse();
+      const list = document.getElementById('alerts-list');
+      const search = document.getElementById('search-input') as HTMLInputElement;
+      const filters = document.querySelectorAll('button[data-filter]');
+
+      let currentFilter = 'todos';
+      let currentSearch = '';
+
+      const renderAlerts = () => {
+        if (!list) return;
+        list.innerHTML = '';
+        
+        let filtered = alerts.filter(a => {
+          const type = a.connection === 'Disconnected' ? 'offline' : 'temp';
+          if (currentFilter !== 'todos' && currentFilter !== type) return false;
+          if (currentSearch && !a.name.toLowerCase().includes(currentSearch.toLowerCase())) return false;
+          return true;
+        });
+
+        if (filtered.length === 0) {
+          list.innerHTML = '<p class="text-center text-on-surface-variant py-8">Nenhum alerta encontrado.</p>';
+          return;
+        }
+
+        filtered.forEach(r => {
+          const isOffline = r.connection === 'Disconnected';
+          const icon = isOffline ? 'warning' : 'notifications_active';
+          const title = isOffline ? 'Equipamento Offline' : 'Temperatura Crítica';
+          const colorClass = isOffline ? 'bg-tertiary-container/30 text-tertiary' : 'bg-error-container/30 text-error';
+
+          list.innerHTML += `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-surface-container-low rounded-2xl gap-4 hover:shadow-md transition-shadow ring-1 ring-black/5">
+              <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-full ${colorClass} flex items-center justify-center shrink-0">
+                      <span class="material-symbols-outlined">${icon}</span>
+                  </div>
+                  <div>
+                      <h4 class="font-headline font-bold text-on-surface text-lg">${title}</h4>
+                      <p class="text-sm font-medium text-on-surface-variant">${r.name}</p>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class="material-symbols-outlined text-[14px] text-outline">schedule</span>
+                        <span class="text-xs text-outline font-bold">${r.date}, ${r.time}</span>
+                      </div>
+                  </div>
+              </div>
+              <div class="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1">
+                  <div class="text-right">
+                      <span class="block text-[10px] font-bold text-outline uppercase tracking-widest">Leitura</span>
+                      <span class="font-headline font-bold text-xl text-on-surface">${r.temp}°C</span>
+                  </div>
+                  <button class="px-5 py-2 bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-bold text-sm rounded-full transition-colors ml-auto">Detalhes</button>
+              </div>
+            </div>`;
+        });
+      };
+
+      if (search) {
+        search.addEventListener('input', e => {
+          currentSearch = (e.target as HTMLInputElement).value;
+          renderAlerts();
+        });
+      }
+
+      filters.forEach(btn => {
+        btn.addEventListener('click', e => {
+          filters.forEach(b => {
+             b.classList.remove('bg-primary-container', 'text-on-primary-container');
+             b.classList.add('bg-surface-container', 'text-on-surface');
+          });
+          const target = e.currentTarget as HTMLElement;
+          target.classList.remove('bg-surface-container', 'text-on-surface');
+          target.classList.add('bg-primary-container', 'text-on-primary-container');
+          currentFilter = target.getAttribute('data-filter') || 'todos';
+          renderAlerts();
+        });
+      });
+
+      renderAlerts();
+    });
+  }
+
+  // --- Visualizacao Relatorio ---
+  if (isPage('visualizacao_relatorio')) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const type = urlParams.get('type') || 'Relatório Completo';
+    const hasGraphs = urlParams.get('graphs') !== 'false';
+    const hasLogs = urlParams.get('logs') !== 'false';
+
+    getReadings().then(mutData => {
+      let data = [...mutData];
+      if (!data || data.length === 0) return;
+      
+      const filterCamsStr = urlParams.get('cams');
+      if (filterCamsStr && filterCamsStr !== 'ALL') {
+          const validCams = filterCamsStr.split(',');
+          data = data.filter(r => validCams.includes(r.device_id) || validCams.includes(r.name)); 
+      }
+      if (data.length === 0) return;
+      
+      const elChartSec = document.getElementById('report-chart-section');
+      const elLogsSec = document.getElementById('report-logs-section');
+      const elStatsGrid = document.getElementById('report-stats-grid');
+      const elTableTitle = document.getElementById('report-table-title');
+
+      if (!hasGraphs && elChartSec) elChartSec.classList.add('hidden');
+      if (!hasLogs && elLogsSec) elLogsSec.classList.add('hidden');
+
+      const { max, min, avg } = calcStats(data);
+      const bounds = getDateBounds(data);
+
+      const elTitle = document.getElementById('report-filename');
+      const elType = document.getElementById('report-type-title');
+      const elDate = document.getElementById('report-date-generated');
+      const elAvg = document.getElementById('report-avg-temp');
+      const elMax = document.getElementById('report-max-temp');
+      const elMin = document.getElementById('report-min-temp');
+      const tbl = document.getElementById('report-records-table');
+
+      if (elTitle) elTitle.textContent = `relatorio_insight_${new Date().getTime()}.pdf`;
+      if (elType) elType.textContent = type;
+      if (elDate && bounds) elDate.textContent = `Gerado p/ ${bounds.min.toLocaleDateString()} a ${bounds.max.toLocaleDateString()}`;
+      if (elAvg) elAvg.textContent = `${avg.toFixed(1)}°C`;
+      if (elMax) elMax.textContent = `${max.toFixed(1)}°C`;
+      if (elMin) elMin.textContent = `${min.toFixed(1)}°C`;
+
+      // Populate company info from localStorage
+      const companyName = localStorage.getItem('profile_company') || 'Get Temp Ltda';
+      const companyLocation = localStorage.getItem('profile_company_location') || 'São Paulo, SP - Brasil';
+      const companyCnpj = localStorage.getItem('profile_company_cnpj') || '00.000.000/0001-00';
+      const elCompanyName = document.getElementById('report-company-name');
+      const elCompanyLocation = document.getElementById('report-company-location');
+      const elCompanyCnpj = document.getElementById('report-company-cnpj');
+      if (elCompanyName) elCompanyName.textContent = companyName;
+      if (elCompanyLocation) elCompanyLocation.textContent = companyLocation;
+      if (elCompanyCnpj) elCompanyCnpj.textContent = companyCnpj;
+
+      if (hasGraphs && elChartSec) {
+         const chartContainer = elChartSec.querySelector('#dynamic-chart-container');
+         if (chartContainer) {
+            chartContainer.innerHTML = ''; // Limpa as barras hardcoded caso existam
+            const totalBars = Math.min(data.length, 120); // render max 120 nodes so dom doesn't explode
+            const step = Math.ceil(data.length / totalBars);
+            for (let i = 0; i < totalBars; i++) {
+               const sample = data[i * step];
+               if(!sample) break;
+               
+               const pct = Math.max(10, Math.min(100, ((sample.temp + 40) / 40) * 90 + 10));
+               const isCritical = sample.temp > -15 || sample.temp < -25;
+               const bgClass = isCritical ? 'bg-error' : 'bg-primary';
+               
+               chartContainer.insertAdjacentHTML('beforeend', `<div class="flex-1 ${bgClass} rounded-t-sm transition-all duration-300" style="height: ${pct}%;"></div>`);
+            }
+         }
+      }
+
+      if (tbl) {
+        if (type.includes('Auditoria') || type.includes('Risco')) {
+           const safeCount = data.filter(d => d.temp >= -25 && d.temp <= -15).length;
+           const safePercent = (safeCount / data.length * 100).toFixed(1);
+           
+           if (elStatsGrid) {
+              elStatsGrid.innerHTML = `
+                 <div class="p-6 bg-surface-container rounded-md col-span-2 shadow-sm border border-outline-variant/10">
+                    <p class="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Taxa de Conformidade</p>
+                    <p class="font-headline text-4xl font-bold ${Number(safePercent) > 90 ? 'text-primary' : 'text-error'} mb-1">${safePercent}%</p>
+                    <p class="text-sm font-semibold text-on-surface-variant">${safeCount} de ${data.length} leituras auditadas ficaram em margem segura (-25°C a -15°C).</p>
+                 </div>
+              `;
+           }
+           if (elTableTitle) elTableTitle.textContent = "Desvios Críticos e Exceções Lógicas (Raw Data)";
+           
+           tbl.innerHTML = [...data].reverse().map(d => {
+             const isWarning = d.connection !== 'Connected' || d.temp > -15 || d.temp < -25;
+             if (!isWarning) return ''; // na auditoria se o user quer todas, vamos injetar tds ou n?
+             // "necessário que todos os registros da base" ah, auditoria mostra tudo mas sinaliza
+             return `<div class="flex items-center justify-between py-2 border-b border-surface-container/30 text-sm">
+                <span class="font-medium ${isWarning ? 'text-error font-bold' : 'text-on-surface-variant'}">${d.date} ${d.time} <span class="font-normal opacity-60">| ${d.name}</span></span>
+                <span class="${isWarning ? 'font-bold text-error' : 'font-semibold'}">${d.temp}°C - ${d.connection}</span>
+             </div>`;
+           }).join('');
+        } else {
+           // Relatório Completo Raw Data
+           if (elTableTitle) elTableTitle.textContent = "Log Integral de Leitura Contínua";
+           
+           tbl.innerHTML = [...data].reverse().map(d => {
+             const isWarning = d.connection !== 'Connected' || d.temp > -15 || d.temp < -25;
+             return `<div class="flex items-center justify-between py-1.5 border-b border-surface-container/20 text-xs">
+                <span class="font-medium ${isWarning ? 'text-error' : 'text-on-surface-variant'}">${d.date} ${d.time} <span class="font-normal opacity-50">| ${d.name} | ID:${d.device_id}</span></span>
+                <span class="${isWarning ? 'font-bold bg-error/10 text-error px-1 rounded' : 'font-semibold text-primary'}">${d.temp.toFixed(1)}°C</span>
+             </div>`;
+           }).join('');
+        }
+      }
+
+      document.getElementById('btn-pdf')?.addEventListener('click', () => {
+         window.print();
+      });
+    });
+  }
+
+  // --- Ajustes ---
   if (isPage('ajustes')) {
-    // Toggle switches: show toast-like feedback on change
+    // Edit Profile
+    const editBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Editar Perfil'));
+    const modal = document.getElementById('edit-profile-modal');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const btnCancel = document.getElementById('modal-cancel');
+    const btnClose = document.getElementById('close-modal');
+    const btnSave = document.getElementById('modal-save');
+    const profileName = document.querySelector('h2.font-headline');
+    const profileRole = document.querySelector('p.mt-4.text-on-surface-variant');
+
+    const closeModal = () => modal?.classList.add('hidden');
+    const openModal = () => {
+      const savedName = localStorage.getItem('profile_name');
+      const savedEmail = localStorage.getItem('profile_email');
+      const savedRole = localStorage.getItem('profile_role');
+      const savedCompany = localStorage.getItem('profile_company');
+      const savedCompanyLocation = localStorage.getItem('profile_company_location');
+      const savedCompanyCnpj = localStorage.getItem('profile_company_cnpj');
+      if (savedName) (document.getElementById('edit-name') as HTMLInputElement).value = savedName;
+      if (savedEmail) (document.getElementById('edit-email') as HTMLInputElement).value = savedEmail;
+      if (savedRole) (document.getElementById('edit-role') as HTMLInputElement).value = savedRole;
+      if (savedCompany) (document.getElementById('edit-company') as HTMLInputElement).value = savedCompany;
+      if (savedCompanyLocation) (document.getElementById('edit-company-location') as HTMLInputElement).value = savedCompanyLocation;
+      if (savedCompanyCnpj) (document.getElementById('edit-company-cnpj') as HTMLInputElement).value = savedCompanyCnpj;
+      modal?.classList.remove('hidden');
+    };
+
+    if (editBtn) {
+       editBtn.addEventListener('click', openModal);
+    }
+    [modalBackdrop, btnCancel, btnClose].forEach(el => el?.addEventListener('click', closeModal));
+    
+    btnSave?.addEventListener('click', () => {
+      const name = (document.getElementById('edit-name') as HTMLInputElement).value;
+      const email = (document.getElementById('edit-email') as HTMLInputElement).value;
+      const role = (document.getElementById('edit-role') as HTMLInputElement).value;
+      const company = (document.getElementById('edit-company') as HTMLInputElement).value;
+      const companyLocation = (document.getElementById('edit-company-location') as HTMLInputElement).value;
+      const companyCnpj = (document.getElementById('edit-company-cnpj') as HTMLInputElement).value;
+      
+      localStorage.setItem('profile_name', name);
+      localStorage.setItem('profile_email', email);
+      localStorage.setItem('profile_role', role);
+      localStorage.setItem('profile_company', company);
+      localStorage.setItem('profile_company_location', companyLocation);
+      localStorage.setItem('profile_company_cnpj', companyCnpj);
+
+      if (profileName) {
+        const parts = name.trim().split(' ');
+        const first = parts[0] || name;
+        const last = parts.slice(1).join(' ') || '';
+        profileName.innerHTML = last ? `${first} <span class="text-outline-variant">${last}</span>` : first;
+      }
+      if (profileRole && role) {
+        profileRole.textContent = role;
+      }
+      closeModal();
+    });
+
+    // Load saved profile on page load
+    const savedName = localStorage.getItem('profile_name');
+    const savedRole = localStorage.getItem('profile_role');
+    if (savedName && profileName) {
+      const parts = savedName.trim().split(' ');
+      const first = parts[0] || savedName;
+      const last = parts.slice(1).join(' ') || '';
+      profileName.innerHTML = last ? `${first} <span class="text-outline-variant">${last}</span>` : first;
+    }
+    if (savedRole && profileRole) {
+      profileRole.textContent = savedRole;
+    }
+
+    // Logout
+    const sairBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Sair'));
+    if (sairBtn) {
+      sairBtn.addEventListener('click', () => { 
+        localStorage.removeItem('authToken');
+        window.location.href = 'login.html'; 
+      });
+    }
+
+    // Nova Câmara button
+    const novaCamaraBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Nova Câmara'));
+    if (novaCamaraBtn) {
+      novaCamaraBtn.addEventListener('click', () => {
+        window.location.href = 'nova_camara.html';
+      });
+    }
+
+    // Notification Preferences - Load and Save State
+    const notificationToggles = document.querySelectorAll('section .md\\:col-span-8 input[type="checkbox"]');
+    
+    // Restore saved states
+    notificationToggles.forEach((toggle, index) => {
+      const savedState = localStorage.getItem(`notification_toggle_${index}`);
+      if (savedState !== null) {
+        (toggle as HTMLInputElement).checked = savedState === 'true';
+      }
+    });
+
+    // Toggle Feedback & Save
     const toggles = document.querySelectorAll('input[type="checkbox"]');
     toggles.forEach(toggle => {
       toggle.addEventListener('change', (e) => {
         const isChecked = (e.target as HTMLInputElement).checked;
         const label = (e.target as HTMLElement).closest('div.flex.items-center.justify-between')?.querySelector('h5')?.textContent ?? 'Configuração';
+        
+        // Save to localStorage if it's a notification toggle
+        notificationToggles.forEach((nt, index) => {
+          if (nt === e.target) {
+            localStorage.setItem(`notification_toggle_${index}`, isChecked.toString());
+          }
+        });
+
         const toast = document.createElement('div');
         toast.textContent = `${label.trim()}: ${isChecked ? 'Ativado ✓' : 'Desativado'}`;
         toast.style.cssText = `
@@ -556,24 +1144,122 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // "Nova Câmara" button → navigate to nova_camara
-    const novaCamaraBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Nova Câmara'));
-    if (novaCamaraBtn) {
-      novaCamaraBtn.addEventListener('click', () => { window.location.href = 'nova_camara'; });
-    }
+    // Populate Cameras
+    const grid = document.getElementById('cameras-grid');
+    if (grid) {
+      const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+      
+      getReadings().then(data => {
+        const unique = data ? getUniqueDevices(data) : [];
+        
+        // Build a map of device data from readings
+        const readingsMap: Record<string, SensorReading> = {};
+        if (data) {
+          unique.forEach(id => {
+            const readings = filterByChamber(data, id);
+            readingsMap[id] = readings[readings.length - 1];
+          });
+        }
+        
+        // Combine: registered cameras from localStorage + cameras from readings
+        const allDeviceIds = new Set<string>();
+        
+        // Add IDs from localStorage (registered cameras)
+        Object.keys(storedCameras).forEach(id => allDeviceIds.add(id));
+        
+        // Add IDs from readings data
+        unique.forEach(id => allDeviceIds.add(id));
+        
+        if (allDeviceIds.size === 0) {
+          grid.innerHTML = '<p class="text-center text-on-surface-variant py-8">Nenhuma câmara registrada.</p>';
+          return;
+        }
+        
+        grid.innerHTML = Array.from(allDeviceIds).map(id => {
+          const stored = storedCameras[id];
+          const reading = readingsMap[id];
+          const name = stored?.name || reading?.name || `Câmara ${id}`;
+          const location = stored?.location || '';
+          const isOffline = reading?.connection === 'Disconnected';
+          const temp = reading?.temp;
+          const icon = isOffline ? 'warning' : 'check_circle';
+          const color = isOffline ? 'text-amber-500' : 'text-primary';
+          return `
+          <div class="group relative overflow-hidden rounded-lg bg-surface-container-low p-8 flex flex-col justify-between min-h-[200px]" data-device-id="${id}">
+              <div class="absolute top-0 right-0 p-4">
+              <button class="menu-btn p-3 rounded-full hover:bg-surface-container-high transition-colors focus:outline-none">
+                  <span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+              </button>
+              </div>
+              <div>
+              <span class="material-symbols-outlined ${color} mb-3 shadow-lg shadow-black/5" style="font-variation-settings: 'FILL' 1; font-size: 32px;">${icon}</span>
+              <h4 class="font-headline font-bold text-2xl text-on-surface mb-1">${name}</h4>
+              <p class="text-on-surface-variant text-sm font-semibold mb-4">${location ? location + ' | ' : ''}ID: ${id}</p>
+              </div>
+              <div class="flex gap-4">
+              <div class="bg-surface-container-high px-4 py-2 rounded-md">
+                  <span class="block text-[10px] uppercase font-bold text-outline tracking-wider mb-0.5">Temp. Atual</span>
+                  <span class="${color} font-bold text-xs">${temp !== undefined ? temp + '°C' : '--'}</span>
+              </div>
+              <div class="bg-surface-container-high px-4 py-2 rounded-md">
+                  <span class="block text-[10px] uppercase font-bold text-outline tracking-wider mb-0.5">Status</span>
+                  <span class="${color} font-bold text-xs">${isOffline ? 'Offline' : 'Online'}</span>
+              </div>
+              </div>
+          </div>`;
+        }).join('');
 
-    // "Editar Perfil" button → alert placeholder
-    const editarBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Editar Perfil'));
-    if (editarBtn) {
-      editarBtn.addEventListener('click', () => {
-        alert('Funcionalidade de edição de perfil disponível em breve.');
+        // Context Menu logic
+        const contextMenu = document.getElementById('context-menu');
+        const editButton = contextMenu?.querySelector('button:first-child');
+        const deleteButton = contextMenu?.querySelector('button:last-child');
+        let selectedDeviceId = '';
+
+        document.querySelectorAll('.menu-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const parentCard = (e.currentTarget as HTMLElement).closest('.group');
+            if (!parentCard) return;
+
+            selectedDeviceId = parentCard.getAttribute('data-device-id') || '';
+
+            if (contextMenu) {
+              contextMenu.style.top = `${(e as MouseEvent).clientY}px`;
+              contextMenu.style.left = `${(e as MouseEvent).clientX - 160}px`;
+              contextMenu.classList.remove('hidden');
+            }
+          });
+        });
+
+        if (editButton) {
+          editButton.addEventListener('click', () => {
+            contextMenu?.classList.add('hidden');
+            if (selectedDeviceId) {
+              window.location.href = `nova_camara.html?edit=${selectedDeviceId}`;
+            }
+          });
+        }
+
+        if (deleteButton) {
+          deleteButton.addEventListener('click', () => {
+            contextMenu?.classList.add('hidden');
+            if (selectedDeviceId) {
+              const stored = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+              delete stored[selectedDeviceId];
+              localStorage.setItem('gettemp_cameras', JSON.stringify(stored));
+              
+              const card = document.querySelector(`[data-device-id="${selectedDeviceId}"]`) as HTMLElement;
+              if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                card.style.transition = 'all 0.3s ease';
+                setTimeout(() => card.remove(), 300);
+              }
+            }
+          });
+        }
+        document.addEventListener('click', () => contextMenu?.classList.add('hidden'));
       });
-    }
-
-    // "Sair" button → redirect to login
-    const sairBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Sair'));
-    if (sairBtn) {
-      sairBtn.addEventListener('click', () => { window.location.href = 'login'; });
     }
   }
 });
