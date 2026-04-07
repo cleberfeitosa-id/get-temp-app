@@ -42,8 +42,8 @@ Atualmente o projeto opera em modo **mock** (dados simulados via JSON estático)
 | Estilização | Tailwind CSS (via CDN) + tokens Material Design 3 |
 | Tipografia | Google Fonts — Space Grotesk + Manrope |
 | Ícones | Material Symbols Outlined |
-| Dados (atual) | JSON estático em `/public/mock/esp32_mock.json` |
-| Dados (futuro) | MQTT via `mqtt` npm package |
+| Dados (mock) | JSON estático em `/public/mock/esp32_mock.json` |
+| Dados (tempo real) | MQTT via `mqtt` npm package |
 | Hosting | [Vercel](https://vercel.com) (via `vercel.json` + `vite.config.ts`) |
 | Repositório | [GitHub](https://github.com/cleberfeitosa-id/get-temp-app) |
 
@@ -58,19 +58,20 @@ gettemp_app_ts/
 │       └── esp32_mock.json        ← Dados simulados do ESP32
 ├── src/
 │   ├── main.ts                    ← Lógica principal / roteamento por página
-│   ├── dataService.ts             ← Abstração de dados (Mock → MQTT-ready)
-│   └── style.css                  ← Estilos globais
-├── index.html                     ← Dashboard de Status
-├── analise.html                   ← Análise Temporal com Filtros
-├── relatorios.html                ← Geração e Export de Relatórios
-├── detalhes_camara.html           ← Detalhe por Câmara (via ?id=CAM01)
-├── ajustes.html                   ← Configurações, Perfil e Gestão de Câmaras
-├── historico_alertas.html         ← Feed de Alertas
-├── nova_camara.html               ← Formulário de Cadastro/Edição de Câmara
-├── visualizacao_relatorio.html    ← Preview de Relatório Gerado
-├── login.html                     ← Tela de Login
-├── vite.config.ts                 ← Configuração MPA do Vite
-└── vercel.json                    ← Roteamento limpo na Vercel
+│   ├── dataService.ts            ← Abstração de dados (Mock + MQTT real-time)
+│   ├── mqttService.ts            ← Serviço de conexão MQTT
+│   └── style.css                 ← Estilos globais
+├── index.html                    ← Dashboard de Status (tempo real)
+├── analise.html                  ← Análise Temporal com Filtros (tempo real)
+├── relatorios.html               ← Geração e Export de Relatórios
+├── detalhes_camara.html          ← Detalhe por Câmara (tempo real)
+├── ajustes.html                 ← Configurações, Perfil e Gestão de Câmaras
+├── historico_alertas.html        ← Feed de Alertas
+├── nova_camara.html              ← Formulário de Cadastro/Edição de Câmara
+├── visualizacao_relatorio.html   ← Preview de Relatório Gerado
+├── login.html                    ← Tela de Login
+├── vite.config.ts                ← Configuração MPA do Vite
+└── vercel.json                  ← Roteamento limpo na Vercel
 ```
 
 ---
@@ -308,30 +309,57 @@ gettemp_app_ts/
 
 ---
 
-## Integração MQTT (Guia Futuro)
+## Integração MQTT (Implementado)
 
-O arquivo `src/dataService.ts` está preparado para substituição do mock por MQTT:
+O sistema agora suporta dados em tempo real via MQTT. Configure o broker na variável `MQTT_BROKER_URL` em `src/main.ts`:
 
 ```typescript
-// 1. No dataService.ts, altere:
-const USE_MOCK = false; // de true para false
-
-// 2. Descomente e configure:
-const MQTT_CONFIG = {
-  brokerUrl: 'wss://seu-broker:8083/mqtt',
-  topic: 'coldchain/readings/#',
-  username: 'user',
-  password: 'pass',
-};
-
-// 3. Instale o pacote:
-// npm install mqtt
-
-// 4. Implemente o subscriber no bloco comentado em dataService.ts
-// O resto da aplicação (main.ts, todas as telas) funciona sem modificações.
+// No início do arquivo src/main.ts
+const MQTT_BROKER_URL = 'wss://seu-broker:8084/mqtt';
 ```
 
-### Formato esperado da mensagem MQTT (mesmo schema do mock):
+### Broker MQTT Compatíveis
+
+- **HiveMQ Cloud** (gratuito para testes): `wss://broker.hivemq.com:8884/mqtt`
+- **Mosquitto** com WebSocket habilitado
+- **AWS IoT Core**
+- Qualquer broker MQTT com suporte a WebSockets
+
+### Tópico e Formato da Mensagem
+
+O ESP32 deve publicar no tópico: `gettemp/<device_id>`
+
+```json
+{
+  "device_id": "CAM01",
+  "name": "Câmara Principal A-14",
+  "temp": -18.4,
+  "wifi_rssi": -65,
+  "connection": "Connected",
+  "date": "2026-03-20",
+  "time": "12:00:00"
+}
+```
+
+### Campos Opcionais
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `device_id` | string | ID único da câmara (obrigatório) |
+| `name` | string | Nome da câmara |
+| `temp` | number | Temperatura em °C (obrigatório) |
+| `wifi_rssi` | number | Sinal Wi-Fi em dBm |
+| `spiffs_usage` | number | Uso da memória SPIFFS (%) |
+| `free_heap` | number | Memória livre do ESP32 |
+| `uptime` | number | Tempo de operação em segundos |
+| `device_ip` | string | Endereço IP do dispositivo |
+| `connection` | string | Status: "Connected" ou "Disconnected" |
+
+### Status da Conexão MQTT
+
+Um indicador no header mostra o status da conexão:
+- **MQTT** (verde): Conectado ao ESP32
+- **DEMO** (cinza): Modo demo com dados simulados
 
 ```json
 {

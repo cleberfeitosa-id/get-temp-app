@@ -1,5 +1,14 @@
 import './style.css';
-import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, type SensorReading } from './dataService.ts';
+import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, getLatestReading, onRealtimeUpdate, initMQTT, getConnectionStatus, getAllReadings, type SensorReading } from './dataService.ts';
+
+// MQTT Broker URL - Configure this to match your ESP32 MQTT broker
+// Example: 'wss://broker.hivemq.com:8884/mqtt'
+const MQTT_BROKER_URL = '';
+
+// Initialize MQTT connection (will silently skip if no broker URL configured)
+if (MQTT_BROKER_URL) {
+  initMQTT({ brokerUrl: MQTT_BROKER_URL, topic: 'gettemp/#' });
+}
 
 // Shared Header Component
 const HeaderHTML = `
@@ -10,6 +19,9 @@ const HeaderHTML = `
       <span class="material-symbols-outlined" id="header-icon">thermostat</span>
     </button>
     <span class="text-xl font-bold text-sky-900 font-['Space_Grotesk'] tracking-tight text-2xl">Get Temp</span>
+    <span id="mqtt-status-indicator" class="ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500" title="Status da conexão MQTT">
+      OFFLINE
+    </span>
   </div>
   <button id="header-profile-btn" onclick="window.location.href='ajustes.html'" class="w-11 h-11 rounded-full bg-sky-200 flex items-center justify-center text-sky-900 font-bold text-sm border-2 border-white shadow-sm cursor-pointer hover:bg-sky-300 hover:scale-105 transition-all duration-200" title="Acessar perfil">
     <span id="header-avatar-initials">TS</span>
@@ -71,12 +83,40 @@ document.addEventListener("DOMContentLoaded", () => {
   // Update header avatar initials from saved profile
   const savedName = localStorage.getItem('profile_name');
   if (savedName) {
-    const initials = savedName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const initials = savedName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
     setTimeout(() => {
       const avatarEl = document.getElementById('header-avatar-initials');
       if (avatarEl) avatarEl.textContent = initials;
     }, 0);
   }
+
+  // Update MQTT status indicator
+  const updateMQTTStatus = () => {
+    const statusEl = document.getElementById('mqtt-status-indicator');
+    if (statusEl) {
+      const status = getConnectionStatus();
+      if (status.mqtt) {
+        statusEl.textContent = 'MQTT';
+        statusEl.className = 'ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700';
+        statusEl.title = 'Conectado ao ESP32 via MQTT';
+      } else {
+        statusEl.textContent = 'DEMO';
+        statusEl.className = 'ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500';
+        statusEl.title = 'Modo demo - Dados simulados';
+      }
+    }
+  };
+  setTimeout(updateMQTTStatus, 100);
+
+  // Listen for real-time updates to refresh dashboard
+  onRealtimeUpdate(() => {
+    updateMQTTStatus();
+    // Refresh dashboard data if on index page
+    if (isPage('index') || currentPath === '/') {
+      const refreshFn = (window as any).refreshDashboardData;
+      if (refreshFn) refreshFn();
+    }
+  });
 
   // --- Auth Logic (Login) ---
   if (onLoginPage) {
@@ -136,70 +176,85 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Re-run dynamic script logic if on Dashboard (index.html)
   if (isPage('index') || currentPath === '/') {
-    getReadings().then(dataArray => {
-        if (!dataArray || dataArray.length === 0) return;
-        
-        // Grab the most recent reading for Câmara 01 for the main dashboard
+    // Function to refresh dashboard data (called on load and on real-time updates)
+    const refreshDashboardData = async () => {
+      const dataArray = await getReadings();
+      if (!dataArray || dataArray.length === 0) return;
+      
+      // Grab the most recent reading for CAM01 for the main dashboard
+      // Check real-time data first
+      const realtimeMain = getLatestReading('CAM01');
+      const mainData = realtimeMain || (() => {
         const cam1Readings = filterByChamber(dataArray, 'CAM01');
-        const mainData = cam1Readings[cam1Readings.length - 1] || dataArray[0];
-        
-        const camNameEl = document.getElementById('cam_name');
-        const camTempEl = document.getElementById('cam_temp');
-        const sysStatusEl = document.getElementById('system_status');
-        const sysSpiffsEl = document.getElementById('system_spiffs');
-        const sysRssiEl = document.getElementById('system_rssi');
+        return cam1Readings[cam1Readings.length - 1] || dataArray[0];
+      })();
+      
+      const camNameEl = document.getElementById('cam_name');
+      const camTempEl = document.getElementById('cam_temp');
+      const sysStatusEl = document.getElementById('system_status');
+      const sysSpiffsEl = document.getElementById('system_spiffs');
+      const sysRssiEl = document.getElementById('system_rssi');
 
-        if(camNameEl) camNameEl.textContent = mainData.name || 'Câmara';
-        if(camTempEl) camTempEl.textContent = mainData.temp !== undefined ? Math.round(mainData.temp).toString() : '--';
-        if(sysStatusEl) sysStatusEl.textContent = mainData.connection === 'Connected' ? 'Sistema Normal' : 'Desconectado';
-        if(sysSpiffsEl) sysSpiffsEl.textContent = mainData.spiffs_usage + '%';
-        if(sysRssiEl) sysRssiEl.textContent = mainData.wifi_rssi + ' dBm';
-        
-        // Create trend grid for the 2 chambers
-        const gridContainer = document.getElementById('dynamic-chambers-grid');
-        if (gridContainer) {
-            let gridHtml = '';
-            
-            // Unique devices snippet
-            const uniqueDevices = getUniqueDevices(dataArray);
-            
-            for (let deviceId of uniqueDevices) {
-                const readings = filterByChamber(dataArray, deviceId);
-                const latest = readings[readings.length - 1] as SensorReading;
-                
-                const isSafe = latest.connection === 'Connected' && latest.temp < -15;
-                const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
-                const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
-                const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
-                
-                gridHtml += `
-                <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
-                    <div>
-                        <div class="flex justify-between items-start mb-3">
-                            <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${latest.name}</p>
-                            <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
-                        </div>
-                        <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
-                        <p class="text-[10px] text-slate-500 mt-1">${readings.length} leituras em log</p>
-                    </div>
-                    <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
-                        <div class="h-full ${progressHue} w-[85%]"></div>
-                    </div>
-                </div>`;
-            }
-            
-            gridContainer.innerHTML = gridHtml + `
-                <div class="col-span-2 bg-white/60 backdrop-blur-md p-5 rounded-xl flex items-center justify-between px-8 ring-1 ring-black/5 mt-2 cursor-pointer" onclick="window.location.href='historico_alertas.html'">
-                    <div class="flex items-center gap-3">
-                        <span class="material-symbols-outlined text-amber-600">notification_important</span>
-                        <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${dataArray.length} entradas</span>
-                    </div>
-                    <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
-                </div>
-            `;
-        }
-      })
-      .catch(error => console.error('Error fetching mock data:', error));
+      if(camNameEl) camNameEl.textContent = mainData.name || 'Câmara';
+      if(camTempEl) camTempEl.textContent = mainData.temp !== undefined ? Math.round(mainData.temp).toString() : '--';
+      if(sysStatusEl) sysStatusEl.textContent = mainData.connection === 'Connected' ? 'Sistema Normal' : 'Desconectado';
+      if(sysSpiffsEl) sysSpiffsEl.textContent = (mainData.spiffs_usage || 0) + '%';
+      if(sysRssiEl) sysRssiEl.textContent = (mainData.wifi_rssi || -50) + ' dBm';
+      
+      // Create trend grid for the chambers
+      const gridContainer = document.getElementById('dynamic-chambers-grid');
+      if (gridContainer) {
+          let gridHtml = '';
+          
+          // Unique devices
+          const uniqueDevices = getUniqueDevices(dataArray);
+          
+          for (let deviceId of uniqueDevices) {
+              // Check real-time data first
+              const latestRealtime = getLatestReading(deviceId);
+              const mockReadings = filterByChamber(dataArray, deviceId);
+              const latest = latestRealtime || mockReadings[mockReadings.length - 1];
+              
+              if (!latest) continue;
+              
+              const isSafe = latest.connection === 'Connected' && latest.temp < -15;
+              const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+              const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
+              const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
+              
+              gridHtml += `
+              <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
+                  <div>
+                      <div class="flex justify-between items-start mb-3">
+                          <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${latest.name}</p>
+                          <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
+                      </div>
+                      <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
+                      <p class="text-[10px] text-slate-500 mt-1">${mockReadings.length} leituras em log</p>
+                  </div>
+                  <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
+                      <div class="h-full ${progressHue} w-[85%]"></div>
+                  </div>
+              </div>`;
+          }
+          
+          gridContainer.innerHTML = gridHtml + `
+              <div class="col-span-2 bg-white/60 backdrop-blur-md p-5 rounded-xl flex items-center justify-between px-8 ring-1 ring-black/5 mt-2 cursor-pointer" onclick="window.location.href='historico_alertas.html'">
+                  <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-amber-600">notification_important</span>
+                      <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${dataArray.length} entradas</span>
+                  </div>
+                  <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+              </div>
+          `;
+      }
+    };
+
+    // Expose for real-time updates
+    (window as any).refreshDashboardData = refreshDashboardData;
+
+    // Initial load
+    refreshDashboardData().catch(error => console.error('Error fetching data:', error));
   }
 
   // Phase 4 & 5: Dynamic Details Page Logic
@@ -207,58 +262,67 @@ document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     const deviceId = urlParams.get('id');
 
-    if (deviceId) {
-      getReadings().then((dataArray: SensorReading[]) => {
-          if (!dataArray || dataArray.length === 0) return;
-          const readings: SensorReading[] = filterByChamber(dataArray, deviceId);
-          if (readings.length === 0) return;
-          const latest: SensorReading = readings[readings.length - 1];
-          const tempHeader = document.querySelector('h1.text-\\[5\\.5rem\\]');
-          if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
-          
-          const temps = readings.map((r: SensorReading) => r.temp);
-          const minT = Math.min(...temps) - 2;
-          const maxT = Math.max(...temps) + 2;
-          const range = maxT - minT || 1;
-          const svgWidth = 400;
-          const svgHeight = 100;
-          
-          const points = readings.map((r: SensorReading, idx: number) => {
-             const x = (idx / (readings.length - 1)) * svgWidth;
-             const y = svgHeight - ((r.temp - minT) / range) * svgHeight;
-             return {x, y};
-          });
-          
-          let pathD = `M ${points[0].x} ${points[0].y} `;
-          for(let i = 1; i < points.length; i++) pathD += `L ${points[i].x} ${points[i].y} `;
-          let fillD = pathD + `L ${svgWidth} ${svgHeight} L 0 ${svgHeight} Z`;
-          
-          const paths = document.querySelectorAll('svg path');
-          if (paths && paths.length >= 2) {
-             paths[0].setAttribute('d', pathD);
-             paths[1].setAttribute('d', fillD);
-          }
-          
-          const logsContainer = document.querySelector('.space-y-3');
-          if (logsContainer) {
-              logsContainer.innerHTML = '';
-              [...readings].reverse().forEach((r: SensorReading) => {
-                  const safeStr = (r.temp < -15 && r.connection === 'Connected');
-                  const color = safeStr ? 'bg-primary' : 'bg-secondary';
-                  const title = r.connection === 'Disconnected' ? 'Equipamento Offline' : (safeStr ? 'Leitura Estável' : 'Alerta de Temperatura');
-                  const logHtml = `<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
-                        <div class="flex items-center gap-4">
-                            <div class="w-2 h-2 rounded-full ${color}"></div>
-                            <div>
-                                <p class="font-semibold text-on-surface">${title} (${r.temp}°C)</p>
-                                <span class="text-[12px] text-on-surface-variant">${r.date}, ${r.time}</span>
-                            </div>
+    const renderChamberDetails = (dataArray: SensorReading[]) => {
+      if (!dataArray || dataArray.length === 0 || !deviceId) return;
+      const readings: SensorReading[] = filterByChamber(dataArray, deviceId);
+      if (readings.length === 0) return;
+      
+      // Check real-time data first
+      const realtimeLatest = getLatestReading(deviceId);
+      const latest = realtimeLatest || readings[readings.length - 1];
+      
+      const tempHeader = document.querySelector('h1.text-\\[5\\.5rem\\]');
+      if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
+      
+      const temps = readings.map((r: SensorReading) => r.temp);
+      const minT = Math.min(...temps) - 2;
+      const maxT = Math.max(...temps) + 2;
+      const range = maxT - minT || 1;
+      const svgWidth = 400;
+      const svgHeight = 100;
+      
+      const points = readings.map((r: SensorReading, idx: number) => {
+         const x = (idx / (readings.length - 1)) * svgWidth;
+         const y = svgHeight - ((r.temp - minT) / range) * svgHeight;
+         return {x, y};
+      });
+      
+      let pathD = `M ${points[0].x} ${points[0].y} `;
+      for(let i = 1; i < points.length; i++) pathD += `L ${points[i].x} ${points[i].y} `;
+      let fillD = pathD + `L ${svgWidth} ${svgHeight} L 0 ${svgHeight} Z`;
+      
+      const paths = document.querySelectorAll('svg path');
+      if (paths && paths.length >= 2) {
+         paths[0].setAttribute('d', pathD);
+         paths[1].setAttribute('d', fillD);
+      }
+      
+      const logsContainer = document.querySelector('.space-y-3');
+      if (logsContainer) {
+          logsContainer.innerHTML = '';
+          [...readings].reverse().forEach((r: SensorReading) => {
+              const safeStr = (r.temp < -15 && r.connection === 'Connected');
+              const color = safeStr ? 'bg-primary' : 'bg-secondary';
+              const title = r.connection === 'Disconnected' ? 'Equipamento Offline' : (safeStr ? 'Leitura Estável' : 'Alerta de Temperatura');
+              const logHtml = `<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
+                    <div class="flex items-center gap-4">
+                        <div class="w-2 h-2 rounded-full ${color}"></div>
+                        <div>
+                            <p class="font-semibold text-on-surface">${title} (${r.temp}°C)</p>
+                            <span class="text-[12px] text-on-surface-variant">${r.date}, ${r.time}</span>
                         </div>
-                    </div>`;
-                  logsContainer.insertAdjacentHTML('beforeend', logHtml);
-              });
-          }
-        });
+                    </div>
+                </div>`;
+                logsContainer.insertAdjacentHTML('beforeend', logHtml);
+          });
+      }
+    };
+
+    if (deviceId) {
+      getReadings().then(renderChamberDetails);
+      
+      // Listen for real-time updates on details page
+      onRealtimeUpdate(renderChamberDetails);
     }
   }
 
@@ -378,47 +442,60 @@ document.addEventListener("DOMContentLoaded", () => {
           }
       };
 
-      getReadings().then(dataArray => {
-            if (!dataArray || dataArray.length === 0) return;
-            globalData = dataArray;
-            
-            // Populate Dropdown
-            const selectEl = document.getElementById('chamber-select') as HTMLSelectElement;
-            if (selectEl) {
-                const uniqueChambers = getUniqueDevices(globalData);
-                uniqueChambers.forEach(id => {
-                    const cInfo = globalData.find((d: SensorReading) => d.device_id === id);
-                    const opt = document.createElement('option');
-                    opt.value = id;
-                    opt.textContent = cInfo?.name ?? id;
-                    selectEl.appendChild(opt);
-                });
-
-                selectEl.addEventListener('change', (e) => {
-                    currentChamber = (e.target as HTMLSelectElement).value;
-                    renderAnalytics();
-                });
-            }
-
-            // Populate Time Filters
-            const timeBtns = document.querySelectorAll('.time-filter');
-            timeBtns.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    timeBtns.forEach(b => {
-                        b.classList.remove('bg-primary', 'text-on-primary', 'active-time');
-                        b.classList.add('text-on-surface-variant');
-                    });
-                    const target = e.currentTarget as HTMLElement;
-                    target.classList.remove('text-on-surface-variant');
-                    target.classList.add('bg-primary', 'text-on-primary', 'active-time');
-                    currentDays = parseInt(target.getAttribute('data-days') || '1');
-                    renderAnalytics();
-                });
+      const loadAnalysisData = async () => {
+        const dataArray = await getReadings();
+        if (!dataArray || dataArray.length === 0) return;
+        globalData = dataArray;
+        
+        // Populate Dropdown
+        const selectEl = document.getElementById('chamber-select') as HTMLSelectElement;
+        if (selectEl) {
+            const uniqueChambers = getUniqueDevices(globalData);
+            uniqueChambers.forEach(id => {
+                const cInfo = globalData.find((d: SensorReading) => d.device_id === id);
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = cInfo?.name ?? id;
+                selectEl.appendChild(opt);
             });
 
+            selectEl.addEventListener('change', (e) => {
+                currentChamber = (e.target as HTMLSelectElement).value;
+                renderAnalytics();
+            });
+        }
 
-            // Initial Render
-            renderAnalytics();
+        // Populate Time Filters
+        const timeBtns = document.querySelectorAll('.time-filter');
+        timeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                timeBtns.forEach(b => {
+                    b.classList.remove('bg-primary', 'text-on-primary', 'active-time');
+                    b.classList.add('text-on-surface-variant');
+                });
+                const target = e.currentTarget as HTMLElement;
+                target.classList.remove('text-on-surface-variant');
+                target.classList.add('bg-primary', 'text-on-primary', 'active-time');
+                currentDays = parseInt(target.getAttribute('data-days') || '1');
+                renderAnalytics();
+            });
+        });
+
+        // Initial Render
+        renderAnalytics();
+      };
+
+      // Load data and set up real-time updates
+      loadAnalysisData();
+
+      // Listen for real-time updates on analysis page
+      onRealtimeUpdate(() => {
+        globalData = getAllReadings().sort((a, b) => {
+          const timeA = new Date(`${a.date}T${a.time}`).getTime();
+          const timeB = new Date(`${b.date}T${b.time}`).getTime();
+          return timeB - timeA;
+        });
+        renderAnalytics();
       });
   }
 
