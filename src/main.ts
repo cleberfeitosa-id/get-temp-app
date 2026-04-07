@@ -2,12 +2,12 @@ import './style.css';
 import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, getLatestReading, onRealtimeUpdate, initMQTT, getConnectionStatus, getAllReadings, type SensorReading } from './dataService.ts';
 
 // MQTT Broker URL - Configure this to match your ESP32 MQTT broker
-// Example: 'wss://broker.hivemq.com:8884/mqtt'
-const MQTT_BROKER_URL = '';
+// EMQX Cloud with TLS: wss://r0112411.ala.us-east-1.emqxsl.com:8884/mqtt
+const MQTT_BROKER_URL = 'wss://r0112411.ala.us-east-1.emqxsl.com:8884/mqtt';
 
 // Initialize MQTT connection (will silently skip if no broker URL configured)
 if (MQTT_BROKER_URL) {
-  initMQTT({ brokerUrl: MQTT_BROKER_URL, topic: 'gettemp/#' });
+  initMQTT({ brokerUrl: MQTT_BROKER_URL, topic: 'gettemp' });
 }
 
 // Shared Header Component
