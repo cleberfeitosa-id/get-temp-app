@@ -192,51 +192,9 @@ function loadFromStorage(): SensorReading[] {
     console.warn('[DataService] Could not load from storage:', e);
   }
   
-  // Fallback: load mock data synchronously if no storage
-  console.log('[DataService] No stored data, loading mock data synchronously...');
-  return getSyncMockData();
-}
-
-function getSyncMockData(): SensorReading[] {
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  
-  // Generate readings for today
-  const hours = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
-  const mins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45];
-  const cam01Temps = [-18.4, -18.2, -17.8, -18.5, -19.1, -18.9, -18.3, -17.5, -18.0, -18.7];
-  
-  const cam01Readings = hours.map((h, i) => ({
-    name: 'Câmara Principal A-14',
-    unique_reading_id: `mock-cam01-${i}`,
-    device_id: 'CAM01',
-    device_ip: '192.168.1.101',
-    temp: cam01Temps[i],
-    spiffs_usage: 45 + i,
-    wifi_rssi: -65 + Math.floor(Math.random() * 5) - 2,
-    free_heap: 32000 - i * 100,
-    uptime: 3600 + i * 300,
-    date: todayStr,
-    time: `${h}:${mins[i].toString().padStart(2, '0')}:00`,
-    connection: 'Connected' as const
-  }));
-  
-  const cam02Readings = hours.slice(0, 5).map((h, i) => ({
-    name: 'Câmara Secundária B-02',
-    unique_reading_id: `mock-cam02-${i}`,
-    device_id: 'CAM02',
-    device_ip: '192.168.1.102',
-    temp: -22.1 + (Math.random() * 0.7 - 0.35),
-    spiffs_usage: 38 + i,
-    wifi_rssi: -70 + Math.floor(Math.random() * 5) - 2,
-    free_heap: 31000 - i * 100,
-    uptime: 7200 + i * 600,
-    date: todayStr,
-    time: `${h}:${(mins[i] + i * 10).toString().padStart(2, '0')}:00`,
-    connection: 'Connected' as const
-  }));
-  
-  return [...cam01Readings, ...cam02Readings];
+  // No fallback to mock data - only real ESP32 data
+  console.log('[DataService] No stored data, returning empty array');
+  return [];
 }
 
 // --- Initialize MQTT ---
