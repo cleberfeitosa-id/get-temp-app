@@ -1,5 +1,5 @@
 import './style.css';
-import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, getTimeSinceLastComm, saveLastReading, loadLastReading, type SensorReading } from './dataService.ts';
+import { getReadings, filterByChamber, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, saveLastReading, loadLastReading, type SensorReading } from './dataService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -687,10 +687,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 target.setAttribute('r', '6');
               });
               
-              circle.addEventListener('mousemove', (e) => {
-                tooltip!.style.left = `${e.clientX + 15}px`;
-                tooltip!.style.top = `${e.clientY - 10}px`;
-              });
+              circle.addEventListener('mousemove', ((e: Event) => {
+                const mouseEvent = e as MouseEvent;
+                tooltip!.style.left = `${mouseEvent.clientX + 15}px`;
+                tooltip!.style.top = `${mouseEvent.clientY - 10}px`;
+              }) as EventListener);
               
               circle.addEventListener('mouseleave', (e) => {
                 const target = e.target as SVGElement;
@@ -733,8 +734,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isPage('analise')) {
       let globalData: SensorReading[] = [];
       let currentChamber = 'ALL';
-      let currentDays = 1;
-       
+      const analyticsState = { currentDays: 1 };
+        
       // Get configured cameras
       const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
 
@@ -777,7 +778,7 @@ document.addEventListener("DOMContentLoaded", () => {
           
           // Get device config for tooltip (use first device in filtered data)
           const firstDeviceId = filtered[0]?.device_id;
-          const devConfig = firstDeviceId ? storedCameras[firstDeviceId] : null;
+          // Use first device config if available (used in tooltip)
 
           // 1. Calculate Stats
           const { max: maxTemp, min: minTemp, avg: avgTemp } = calcStats(filtered);
@@ -1007,10 +1008,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     target.setAttribute('r', '6');
                 });
                 
-                circle.addEventListener('mousemove', (e) => {
-                    tooltip.style.left = `${e.clientX + 15}px`;
-                    tooltip.style.top = `${e.clientY - 10}px`;
-                });
+                circle.addEventListener('mousemove', ((e: Event) => {
+                    const mouseEvent = e as MouseEvent;
+                    tooltip.style.left = `${mouseEvent.clientX + 15}px`;
+                    tooltip.style.top = `${mouseEvent.clientY - 10}px`;
+                }) as EventListener);
                 
                 circle.addEventListener('mouseleave', (e) => {
                     const target = e.target as SVGElement;
@@ -1234,7 +1236,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const target = e.currentTarget as HTMLElement;
                     target.classList.remove('text-on-surface-variant');
                     target.classList.add('bg-primary', 'text-on-primary', 'active-time');
-                    currentDays = parseInt(target.getAttribute('data-days') || '1');
+                    analyticsState.currentDays = parseInt(target.getAttribute('data-days') || '1');
                     renderAnalytics();
                 });
             });
@@ -1821,7 +1823,6 @@ document.addEventListener("DOMContentLoaded", () => {
       
       const elChartSec = document.getElementById('report-chart-section');
       const elLogsSec = document.getElementById('report-logs-section');
-      const elTableTitle = document.getElementById('report-table-title');
 
       if (!hasGraphs && elChartSec) elChartSec.classList.add('hidden');
       if (!hasLogs && elLogsSec) elLogsSec.classList.add('hidden');
@@ -1943,7 +1944,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const chartLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
         const upperLimit = chartLimits.max;
         const lowerLimit = chartLimits.min;
-        const limitBuffer = Math.abs(max - min) * 0.1;
+        // Calculate chart range with padding
         const chartMin = Math.min(lowerLimit - 5, min - 3);
         const chartMax = Math.max(upperLimit + 5, max + 3);
         const chartRange = chartMax - chartMin;
@@ -2436,7 +2437,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Load saved maintenance reminders
     const loadMaintenanceReminders = () => {
       const reminders = JSON.parse(localStorage.getItem('maintenance_reminders') || '[]');
-      const maintenanceToggles = document.querySelector('#toggle-maintenance') as HTMLInputElement;
       const isEnabled = localStorage.getItem('notification_toggle_2') === 'true';
       
       if (!maintenanceRemindersContainer) return;

@@ -44,9 +44,6 @@ export interface SensorReading {
 }
 
 // --- MQTT Configuration ---
-const USE_MOCK = false;
-
-// Your EMQX Cloud:
 const MQTT_CONFIG = {
   brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
   topic: 'gettemp',
@@ -269,10 +266,7 @@ function initMQTT() {
     console.log('[DataService] ✓ MQTT Connected to broker!');
     console.log('[DataService] Subscribing to:', MQTT_CONFIG.topic);
     _mqttClient?.subscribe(MQTT_CONFIG.topic);
-  });
-  
-  _mqttClient.on('subscribe', (granted) => {
-    console.log('[DataService] Subscribed:', granted);
+    console.log('[DataService] Subscribed to topic');
   });
   
   _mqttClient.on('message', (topic, payload) => {
