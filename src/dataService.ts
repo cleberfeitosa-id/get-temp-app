@@ -36,6 +36,11 @@ export interface SensorReading {
   date: string;
   time: string;
   connection: 'Connected' | 'Disconnected' | 'Overheating' | 'SPIFFS_Warning';
+  // Optional fields for outlier detection
+  isOutlier?: boolean;
+  outlierReason?: string;
+  invalidJump?: boolean;
+  jumpDelta?: number;
 }
 
 // --- MQTT Configuration ---
@@ -487,4 +492,30 @@ export function getLatestByDevice(data: SensorReading[]): Map<string, SensorRead
   }
   
   return latest;
+}
+
+/**
+ * Save last reading to localStorage for persistence across page loads.
+ */
+export function saveLastReading(reading: SensorReading) {
+  try {
+    localStorage.setItem('gettemp_last_reading', JSON.stringify(reading));
+  } catch (e) {
+    console.warn('[DataService] Could not save last reading:', e);
+  }
+}
+
+/**
+ * Load last reading from localStorage.
+ */
+export function loadLastReading(): SensorReading | null {
+  try {
+    const stored = localStorage.getItem('gettemp_last_reading');
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn('[DataService] Could not load last reading:', e);
+  }
+  return null;
 }

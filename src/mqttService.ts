@@ -17,6 +17,12 @@ export const MQTT_CONFIG = {
   reconnectPeriod: 5000,
 };
 
+// Temperature jump validation limits
+// Quedas de ate 30°C sao permitidas (porta aberta pode resfriar rapido)
+// Subidas de ate 5°C sao permitidas (qualquer subida maior e impossivel fisicamente)
+const MAX_TEMP_RISE = 5;    // Maximum allowed temperature increase in °C
+const MAX_TEMP_DROP = -30;  // Maximum allowed temperature decrease in °C
+
 export type DataCallback = (reading: SensorReading) => void;
 export type ConnectionCallback = (connected: boolean) => void;
 
@@ -168,6 +174,21 @@ class MQTTSensorService {
         (reading as any).isOutlier = true;
         (reading as any).outlierReason = `Temperature ${reading.temp}°C is outside valid range (${MIN_TEMP} to ${MAX_TEMP}°C)`;
       }
+      
+      // Validate temperature jump from last reading
+      const jumpResult = this.validateTemperatureJump(reading);
+      if (jumpResult.isInvalid) {
+        console.warn(`[MQTT] Invalid temperature jump detected: ${reading.temp}°C (delta: ${jumpResult.delta}°C) - ${jumpResult.reason}`);
+        (reading as any).isOutlier = true;
+        (reading as any).outlierReason = jumpResult.reason;
+        (reading as any).invalidJump = true;
+        (reading as any).jumpDelta = jumpResult.delta;
+      }
+      
+      // Update stored last valid reading if not outlier
+      if (!(reading as any).isOutlier) {
+        this.setLastValidReading(reading.device_id, reading.temp);
+      }
 
       console.log(`[MQTT] Parsed reading: ${reading.device_id} - ${reading.temp}°C`);
       return reading;
@@ -206,6 +227,72 @@ class MQTTSensorService {
       }
     }
     return 'Connected';
+  }
+
+  /**
+   * Validate temperature jump from last reading
+   * Returns validation result with delta and reason
+   */
+  private validateTemperatureJump(reading: SensorReading): { isInvalid: boolean; delta: number; reason: string } {
+    const lastTemp = this.getLastValidReading(reading.device_id);
+    
+    // No previous reading - accept the first one
+    if (lastTemp === null) {
+      return { isInvalid: false, delta: 0, reason: 'first reading' };
+    }
+    
+    const delta = reading.temp - lastTemp;
+    
+    // Check if jump is invalid
+    if (delta > MAX_TEMP_RISE) {
+      return {
+        isInvalid: true,
+        delta: delta,
+        reason: `Temperature rose ${delta.toFixed(1)}°C (max allowed rise: ${MAX_TEMP_RISE}°C) - physically impossible jump`
+      };
+    }
+    
+    if (delta < MAX_TEMP_DROP) {
+      return {
+        isInvalid: true,
+        delta: delta,
+        reason: `Temperature dropped ${Math.abs(delta).toFixed(1)}°C (max allowed drop: ${Math.abs(MAX_TEMP_DROP)}°C) - excessive drop`
+      };
+    }
+    
+    return { isInvalid: false, delta: delta, reason: 'valid jump' };
+  }
+
+  /**
+   * Get last valid temperature reading for a device from localStorage
+   */
+  private getLastValidReading(deviceId: string): number | null {
+    try {
+      const stored = localStorage.getItem('gettemp_last_valid_temp');
+      if (stored) {
+        const data = JSON.parse(stored);
+        if (data[deviceId]) {
+          return data[deviceId].temp;
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Could not load last valid reading:', e);
+    }
+    return null;
+  }
+
+  /**
+   * Save last valid temperature reading for a device to localStorage
+   */
+  private setLastValidReading(deviceId: string, temp: number): void {
+    try {
+      const stored = localStorage.getItem('gettemp_last_valid_temp');
+      const data = stored ? JSON.parse(stored) : {};
+      data[deviceId] = { temp: temp, updatedAt: Date.now() };
+      localStorage.setItem('gettemp_last_valid_temp', JSON.stringify(data));
+    } catch (e) {
+      console.warn('[MQTT] Could not save last valid reading:', e);
+    }
   }
 
   /**

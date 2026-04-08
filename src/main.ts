@@ -1,5 +1,5 @@
 import './style.css';
-import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, getTimeSinceLastComm, type SensorReading } from './dataService.ts';
+import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, getTimeSinceLastComm, saveLastReading, loadLastReading, type SensorReading } from './dataService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -183,8 +183,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const timeB = new Date(`${b.date}T${b.time}`).getTime();
         return timeB - timeA;
       });
-      const latest = sortedReadings[0];
-      if (!latest) return;
+      const latest = sortedReadings.find(r => r && r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
+      if (!latest) {
+        console.log('[Dashboard] No valid readings with temperature found');
+        return;
+      }
+      console.log('[Dashboard] Latest reading:', latest.temp, 'at', latest.time);
       
       // Update main display in real-time
       const camNameEl = document.getElementById('cam_name');
@@ -219,6 +223,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       if (lastUpdate) lastUpdate.textContent = `Última atualização: ${latest.time}`;
+      
+      // Save last reading for persistence
+      saveLastReading(latest);
       
       mqttMsgCount++;
       mqttCountEl.textContent = mqttMsgCount + ' msgs';
@@ -284,6 +291,54 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
     
+    // Load last reading from localStorage to display immediately
+    const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+    const lastStoredReading = loadLastReading();
+    if (lastStoredReading) {
+      const camNameEl = document.getElementById('cam_name');
+      const camTempEl = document.getElementById('cam_temp');
+      const lastUpdate = document.getElementById('last_update');
+      const statusBadge = document.getElementById('status_badge');
+      
+      const deviceConfig = storedCameras[lastStoredReading.device_id];
+      const displayName = deviceConfig?.name || lastStoredReading.name || lastStoredReading.device_id;
+      
+      if (camNameEl) camNameEl.textContent = displayName;
+      if (camTempEl && lastStoredReading.temp !== undefined && lastStoredReading.temp !== null) {
+        camTempEl.innerHTML = `${lastStoredReading.temp.toFixed(1)}<span class="text-primary-container text-[5rem] align-top -mt-8">°C</span>`;
+      }
+      if (lastUpdate) lastUpdate.textContent = `Última atualização: ${lastStoredReading.time}`;
+      
+      // Set status based on connection
+      if (statusBadge) {
+        statusBadge.className = 'inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2';
+        if (lastStoredReading.connection === 'Connected') {
+          statusBadge.classList.add('bg-green-100', 'text-green-700');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span><span id="status_text">Estável</span>';
+        } else if (lastStoredReading.connection === 'Overheating') {
+          statusBadge.classList.add('bg-error-container', 'text-error');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-error mr-1.5 animate-pulse"></span><span id="status_text">Superaquecimento</span>';
+        } else if (lastStoredReading.connection === 'SPIFFS_Warning') {
+          statusBadge.classList.add('bg-tertiary-container', 'text-tertiary');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-tertiary mr-1.5 animate-pulse"></span><span id="status_text">SPIFFS Crítico</span>';
+        } else {
+          statusBadge.classList.add('bg-red-100', 'text-red-700');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span><span id="status_text">Offline</span>';
+        }
+      }
+    } else {
+      // No data at all - show placeholder with hyphens
+      const camTempEl = document.getElementById('cam_temp');
+      const camNameEl = document.getElementById('cam_name');
+      const lastUpdate = document.getElementById('last_update');
+      
+      if (camTempEl) {
+        camTempEl.innerHTML = `<span class="text-on-surface-variant">--<span class="text-primary-container text-[5rem] align-top -mt-8">°C</span></span>`;
+      }
+      if (camNameEl) camNameEl.textContent = 'Aguardando dados';
+      if (lastUpdate) lastUpdate.textContent = 'Última atualização: --:--';
+    }
+    
     getReadings().then(dataArray => {
         if (!dataArray || dataArray.length === 0) return;
         
@@ -292,9 +347,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const statusBadge = document.getElementById('status_badge');
         const statusText = document.getElementById('status_text');
         const lastUpdate = document.getElementById('last_update');
-        
-        // Get configured cameras from localStorage
-        const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
         
         // Get unique devices and their latest readings
         const uniqueDevices = getUniqueDevices(dataArray);
@@ -305,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const timeB = new Date(`${b.date}T${b.time}`).getTime();
           return timeB - timeA;
         });
-        const latestReading = sortedReadings[0];
+        const latestReading = sortedReadings.find(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
         
         if (!latestReading) return;
         
@@ -348,45 +400,54 @@ document.addEventListener("DOMContentLoaded", () => {
         if (gridContainer) {
             let gridHtml = '';
             
-            for (let deviceId of uniqueDevices) {
-                const readings = filterByChamber(dataArray, deviceId);
-                const latest = readings[readings.length - 1] as SensorReading;
-                
-                // Get configured name and limits
-                const devConfig = storedCameras[deviceId];
-                const devName = devConfig?.name || latest.name || deviceId;
-                const limits = getDeviceLimits(deviceId);
-                
-                const isSafe = latest.connection === 'Connected' && latest.temp <= limits.max && latest.temp >= limits.min;
-                const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
-                const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
-                const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
-                
-                gridHtml += `
-                <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow max-w-sm text-center mx-auto" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
-                    <div class="w-full">
-                        <div class="flex justify-between items-start mb-3 w-full">
-                            <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${devName}</p>
-                            <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
-                        </div>
-                        <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
-                        <p class="text-[10px] text-slate-500 mt-1">Limites: ${limits.min}°C a ${limits.max}°C</p>
-                    </div>
-                    <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
-                        <div class="h-full ${progressHue} w-[85%]"></div>
-                    </div>
-                </div>`;
-            }
+            // Filter dataArray first to remove invalid readings
+            const validData = dataArray.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
             
-            gridContainer.innerHTML = gridHtml + `
+            if (validData.length === 0) {
+                gridContainer.innerHTML = '<p class="text-center text-slate-500 col-span-2">Nenhum dado de temperatura disponível</p>';
+            } else {
+                for (let deviceId of uniqueDevices) {
+                    let readings = filterByChamber(validData, deviceId);
+                    const latest = readings[readings.length - 1];
+                    
+                    if (!latest || latest.temp === undefined || latest.temp === null || isNaN(latest.temp)) continue;
+                    
+                    // Get configured name and limits
+                    const devConfig = storedCameras[deviceId];
+                    const devName = devConfig?.name || latest.name || deviceId;
+                    const limits = getDeviceLimits(deviceId);
+                    
+                    const isSafe = latest.connection === 'Connected' && latest.temp <= limits.max && latest.temp >= limits.min;
+                    const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+                    const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
+                    const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
+                    
+                    gridHtml += `
+                    <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow max-w-sm text-center mx-auto" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
+                        <div class="w-full">
+                            <div class="flex justify-between items-start mb-3 w-full">
+                                <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${devName}</p>
+                                <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
+                            </div>
+                            <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Limites: ${limits.min}°C a ${limits.max}°C</p>
+                        </div>
+                        <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
+                            <div class="h-full ${progressHue} w-[85%]"></div>
+                        </div>
+                    </div>`;
+                }
+                
+                gridContainer.innerHTML = gridHtml + `
                 <div class="col-span-2 bg-white/60 backdrop-blur-md p-5 rounded-xl flex items-center justify-between px-8 ring-1 ring-black/5 mt-2 cursor-pointer" onclick="window.location.href='historico_alertas.html'">
                     <div class="flex items-center gap-3">
                         <span class="material-symbols-outlined text-amber-600">notification_important</span>
-                        <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${dataArray.length} entradas</span>
+                        <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${validData.length} entradas</span>
                     </div>
                     <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
                 </div>
             `;
+            }
         }
       })
       .catch(error => console.error('Error fetching data:', error));
@@ -486,10 +547,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (alertsContainer) {
               alertsContainer.innerHTML = '';
               
-              // Filter readings that are out of limits or offline
+              // Filter readings that are out of limits, offline, or outliers
               const alerts = readings.filter(r => {
                   const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
-                  return isOutOfRange || r.connection === 'Disconnected';
+                  return isOutOfRange || r.connection === 'Disconnected' || r.isOutlier === true;
               }).reverse();
               
               if (alerts.length === 0) {
@@ -559,8 +620,9 @@ document.addEventListener("DOMContentLoaded", () => {
               
               const limits = getDeviceLimits(deviceId);
               const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
-              const status = r.connection === 'Disconnected' ? 'Offline' : (isOutOfRange ? 'Alerta' : 'Normal');
-              const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutOfRange ? '#dc2626' : '#16a34a');
+              const isOutlier = r.isOutlier === true;
+              const status = r.connection === 'Disconnected' ? 'Offline' : (isOutlier ? 'Inválido' : (isOutOfRange ? 'Alerta' : 'Normal'));
+              const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutlier ? '#f97316' : (isOutOfRange ? '#dc2626' : '#16a34a'));
               
               const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
               circle.setAttribute('class', 'details-chart-point cursor-pointer');
@@ -574,6 +636,13 @@ document.addEventListener("DOMContentLoaded", () => {
               circle.setAttribute('data-status', status);
               circle.setAttribute('data-limits', `${limits.min}°C - ${limits.max}°C`);
               circle.setAttribute('data-device', devConfig?.name || r.name || deviceId);
+              circle.setAttribute('data-is-outlier', isOutlier ? 'true' : 'false');
+              if (isOutlier && r.outlierReason) {
+                circle.setAttribute('data-outlier-reason', r.outlierReason);
+              }
+              if (isOutlier && r.jumpDelta) {
+                circle.setAttribute('data-jump-delta', r.jumpDelta.toString());
+              }
               
               chartSvg.appendChild(circle);
             });
@@ -592,16 +661,27 @@ document.addEventListener("DOMContentLoaded", () => {
             circles.forEach((circle) => {
               circle.addEventListener('mouseenter', (e) => {
                 const target = e.target as SVGElement;
+                const isOutlier = target.dataset.isOutlier === 'true';
+                const outlierReason = target.dataset.outlierReason || '';
+                const jumpDelta = target.dataset.jumpDelta || '';
+                
+                let statusColor = '#16a34a';
+                if (target.dataset.status === 'Offline') statusColor = '#d97706';
+                else if (target.dataset.status === 'Alerta') statusColor = '#dc2626';
+                else if (target.dataset.status === 'Inválido') statusColor = '#f97316';
+                
                 tooltip!.innerHTML = `
                   <div class="font-bold text-sm">${target.dataset.device}</div>
                   <div class="text-lg font-bold mt-1">${target.dataset.temp}°C</div>
                   <div class="text-slate-300 mt-1">${target.dataset.date} ${target.dataset.time}</div>
                   <div class="mt-2 pt-2 border-t border-slate-600">
                     <div class="flex items-center gap-2">
-                      <span class="w-2 h-2 rounded-full" style="background: ${target.dataset.status === 'Normal' ? '#16a34a' : target.dataset.status === 'Offline' ? '#d97706' : '#dc2626'}"></span>
+                      <span class="w-2 h-2 rounded-full" style="background: ${statusColor}"></span>
                       <span>${target.dataset.status}</span>
                     </div>
                     <div class="text-slate-400 mt-1">Limites: ${target.dataset.limits}</div>
+                    ${isOutlier ? `<div class="text-orange-400 mt-1 font-bold">⚠️ ${outlierReason}</div>` : ''}
+                    ${jumpDelta ? `<div class="text-orange-400 mt-1">Delta: ${jumpDelta}°C</div>` : ''}
                   </div>`;
                 tooltip!.classList.remove('hidden');
                 target.setAttribute('r', '6');
@@ -850,8 +930,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 const limits = getDeviceLimits(r.device_id);
                 const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
-                const status = r.connection === 'Disconnected' ? 'Offline' : (isOutOfRange ? 'Alerta' : 'Normal');
-                const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutOfRange ? '#dc2626' : '#16a34a');
+                const isOutlier = r.isOutlier === true;
+                const status = r.connection === 'Disconnected' ? 'Offline' : (isOutlier ? 'Inválido' : (isOutOfRange ? 'Alerta' : 'Normal'));
+                const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutlier ? '#f97316' : (isOutOfRange ? '#dc2626' : '#16a34a'));
                 const rDeviceConfig = storedCameras[r.device_id];
                 
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -870,6 +951,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 circle.setAttribute('data-limits', `${limits.min}°C - ${limits.max}°C`);
                 circle.setAttribute('data-rssi', String(r.wifi_rssi || 0));
                 circle.setAttribute('data-ip', r.device_ip || '');
+                circle.setAttribute('data-is-outlier', isOutlier ? 'true' : 'false');
+                if (isOutlier && r.outlierReason) {
+                  circle.setAttribute('data-outlier-reason', r.outlierReason);
+                }
+                if (isOutlier && r.jumpDelta) {
+                  circle.setAttribute('data-jump-delta', r.jumpDelta.toString());
+                }
                 
                 chartSvg.appendChild(circle);
             });
@@ -895,6 +983,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     const limits = target.dataset.limits;
                     const rssi = target.dataset.rssi;
                     const ip = target.dataset.ip;
+                    const isOutlier = target.dataset.isOutlier === 'true';
+                    const outlierReason = target.dataset.outlierReason || '';
+                    const jumpDelta = target.dataset.jumpDelta || '';
                     
                     tooltip.innerHTML = `
                         <div class="font-bold text-sm">${device}</div>
@@ -908,6 +999,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             <div class="text-slate-400 mt-1">Limites: ${limits}</div>
                             <div class="text-slate-400">RSSI: ${rssi} dBm</div>
                             <div class="text-slate-400">IP: ${ip}</div>
+                            ${isOutlier ? `<div class="text-orange-400 mt-1 font-bold">⚠️ ${outlierReason}</div>` : ''}
+                            ${jumpDelta ? `<div class="text-orange-400 mt-1">Delta: ${jumpDelta}°C</div>` : ''}
                         </div>`;
                     
                     tooltip.classList.remove('hidden');

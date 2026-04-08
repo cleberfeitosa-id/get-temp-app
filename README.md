@@ -181,6 +181,17 @@ get-temp-app/
 
 ## 🚀 Novidades Recentes
 
+### v1.4.0 (Abril 2026)
+
+- **Validação de salto de temperatura**: detecta leituras fisicamente impossíveis
+  - Subidas: máximo +5°C permitido (maior salto = outlier)
+  - Quedas: máximo -30°C permitido
+  - Leituras inválidas marcadas como outlier com reason e delta no tooltip
+  - Pontos outliers exibidos em laranja nos gráficos
+
+- **Persistência de temperatura**: último valor lido сохраняется no localStorage
+- **Correção de erros de dados**: filtra temperaturas NaN/undefined que Quebravam gráficos
+
 ### v1.3.0 (Abril 2026)
 
 - **Seleção de período nos relatórios**: filtros de 24h, 7 dias, 30 dias e 90 dias
