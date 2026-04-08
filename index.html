@@ -75,12 +75,22 @@
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
         .glass-card {
-            background: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.5);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            width: 100%;
         }
         .sky-gradient {
-            background: linear-gradient(135deg, #f7f9fb 0%, #cde5ff 100%);
+            background: linear-gradient(180deg, #f7f9fb 0%, #f0f5fa 50%, #e8eef4 100%);
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-gradient {
+            animation: gradient 3s ease infinite;
         }
         body {
             min-height: max(884px, 100dvh);
@@ -92,37 +102,70 @@
 
 <main class="pt-6 pb-32 px-6 flex flex-col items-center min-h-screen">
 <!-- Main Chamber Status: Câmara 01 -->
-<section class="w-full py-6 flex flex-col items-start relative overflow-hidden">
-<div class="relative z-10 w-full">
+<section class="w-full max-w-3xl py-6 flex flex-col items-center relative overflow-hidden">
+<div class="relative z-10 w-full flex flex-col items-center text-center">
 <div class="inline-flex items-center px-4 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-xs font-bold tracking-wide mb-4">
 <span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'FILL' 1;">sensors</span>
                     STATUS DAS CÂMARAS ATIVAS
                 </div>
-<div class="flex items-end justify-between w-full">
-<div>
+<div class="flex items-end justify-center w-full gap-8">
+<div class="text-center">
 <p id="cam_name" class="text-sm font-label text-on-surface-variant uppercase tracking-widest mb-1">Câmara 01</p>
-<h2 class="font-headline leading-none font-bold tracking-tighter text-on-surface flex items-start text-[7rem]"><span id="cam_temp">-18</span><span class="text-primary-container -mt-4">°</span><span class="text-5xl mt-6 font-semibold ml-1">C</span></h2>
+<div class="relative">
+<h2 id="cam_temp" class="font-headline leading-none font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-primary via-primary-container to-primary bg-[length:200%_auto] animate-gradient text-[8rem] md:text-[9rem] drop-shadow-lg">-18<span class="text-primary-container text-[5rem] align-top -mt-8">°C</span></h2>
+<div class="absolute -bottom-2 left-0 w-full h-1 bg-gradient-to-r from-primary via-secondary-container to-primary rounded-full"></div>
 </div>
-<div class="mb-4 text-right">
-<div class="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider mb-2">
+</div>
+<div class="text-center mb-4">
+<div id="status_badge" class="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider mb-2">
 <span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
-                            Estável
-                        </div>
+<span id="status_text">Estável</span>
+</div>
+<p id="last_update" class="text-[10px] text-on-surface-variant">Última atualização: --:--</p>
 </div>
 </div>
-<div class="mt-8 flex items-center gap-4">
+<div class="mt-8 flex flex-col items-center gap-4">
+<div class="flex items-center gap-4">
 <div class="p-3 bg-white rounded-full shadow-sm ring-1 ring-black/5">
 <span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
 </div>
 <p id="system_status" class="text-2xl font-headline font-medium text-on-surface-variant">Sistema Normal</p>
 </div>
 </div>
+</div>
 <!-- Decorative Glow Background Element -->
 <div class="absolute -right-20 -top-10 w-64 h-64 bg-primary-container/20 blur-[80px] rounded-full"></div>
 </section>
 <!-- Bento Details Section & Sub-Chambers -->
-<section class="w-full grid grid-cols-2 gap-4 mt-6">
-<div id="dynamic-chambers-grid" class="contents"></div>
+<section class="w-full max-w-4xl mt-6 flex flex-col items-center">
+<div id="dynamic-chambers-grid" class="flex flex-col items-center gap-4 w-full"></div>
+</section>
+
+<!-- Debug Panel & Live MQTT Chat -->
+<section class="w-full max-w-3xl mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Debug: Connected Devices Count -->
+<div class="bg-surface-container-low rounded-lg p-4 border border-outline-variant/10">
+<div class="flex items-center justify-between mb-3">
+<h4 class="font-headline text-sm font-bold text-on-surface">Debug - Dispositivos</h4>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">devices</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span id="connected-count" class="text-4xl font-headline font-bold text-primary">0</span>
+<span class="text-xs text-on-surface-variant uppercase tracking-wider">conectados</span>
+</div>
+<div class="mt-3 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div id="connected-bar" class="h-full bg-primary transition-all duration-300" style="width: 0%"></div>
+</div>
+</div>
+
+<!-- Live MQTT Payload Chat -->
+<div class="bg-surface-container-low rounded-lg p-4 border border-outline-variant/10 flex flex-col h-[180px]">
+<div class="flex items-center justify-between mb-2">
+<h4 class="font-headline text-sm font-bold text-on-surface">Live MQTT Payload</h4>
+<span class="text-[10px] text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full" id="mqtt-count">0 msgs</span>
+</div>
+<div id="mqtt-chat" class="flex-1 overflow-y-auto space-y-2 pr-2 text-[10px] font-mono"></div>
+</div>
 </section>
 </main>
 <!-- BottomNavBar -->

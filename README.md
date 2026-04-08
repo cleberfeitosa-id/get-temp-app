@@ -16,12 +16,13 @@
 3. [Estrutura do Projeto](#estrutura-do-projeto)
 4. [Status das Telas](#status-das-telas)
 5. [Funcionalidades Implementadas](#funcionalidades-implementadas)
-6. [🚧 Roadmap — Funcionalidades Pendentes](#roadmap--funcionalidades-pendentes)
-7. [🧪 Checklist de Testes Pré-Lançamento](#checklist-de-testes-pré-lançamento)
-8. [Integração MQTT (Guia Futuro)](#integração-mqtt-guia-futuro)
-9. [Como Executar Localmente](#como-executar-localmente)
-10. [Deploy](#deploy)
-11. [Contribuição](#contribuição)
+6. [🚀 Novidades Recentes](#novidades-recentes)
+7. [🚧 Roadmap — Funcionalidades Pendentes](#roadmap--funcionalidades-pendentes)
+8. [🧪 Checklist de Testes Pré-Lançamento](#checklist-de-testes-pré-lançamento)
+9. [Integração MQTT (Guia)](#integração-mqtt-guia)
+10. [Como Executar Localmente](#como-executar-localmente)
+11. [Deploy](#deploy)
+12. [Contribuição](#contribuição)
 
 ---
 
@@ -29,7 +30,7 @@
 
 **Get Temp** é um dashboard web progressivo voltado ao monitoramento térmico de câmaras frigoríficas industriais. A aplicação foi concebida para se comunicar com dispositivos **ESP32** via protocolo **MQTT**, coletando leituras de temperatura, status de conexão, uso de memória e uptime em intervalos configuráveis.
 
-Atualmente o projeto opera em modo **mock** (dados simulados via JSON estático), com toda a arquitetura de dados abstraída em um `DataService` preparado para receber conexão MQTT real com uma única alteração de configuração.
+O projeto opera atualmente em modo **mock** (dados simulados via JSON estático), com toda a arquitetura de dados abstraída em um `DataService` preparado para receber conexão MQTT real com uma única alteração de configuração.
 
 ---
 
@@ -42,8 +43,9 @@ Atualmente o projeto opera em modo **mock** (dados simulados via JSON estático)
 | Estilização | Tailwind CSS (via CDN) + tokens Material Design 3 |
 | Tipografia | Google Fonts — Space Grotesk + Manrope |
 | Ícones | Material Symbols Outlined |
-| Dados (mock) | JSON estático em `/public/mock/esp32_mock.json` |
-| Dados (tempo real) | MQTT via `mqtt` npm package |
+| Dados (atual) | JSON estático em `/public/mock/esp32_mock.json` |
+| Dados (futuro) | MQTT via `mqtt` npm package |
+| Testing | Vitest |
 | Hosting | [Vercel](https://vercel.com) (via `vercel.json` + `vite.config.ts`) |
 | Repositório | [GitHub](https://github.com/cleberfeitosa-id/get-temp-app) |
 
@@ -52,26 +54,29 @@ Atualmente o projeto opera em modo **mock** (dados simulados via JSON estático)
 ## Estrutura do Projeto
 
 ```
-gettemp_app_ts/
+get-temp-app/
 ├── public/
-│   └── mock/
-│       └── esp32_mock.json        ← Dados simulados do ESP32
+│   ├── mock/
+│   │   └── esp32_mock.json        ← Dados simulados do ESP32
+│   └── mqtt-debug.html           ← Debug de payloads MQTT
 ├── src/
 │   ├── main.ts                    ← Lógica principal / roteamento por página
-│   ├── dataService.ts            ← Abstração de dados (Mock + MQTT real-time)
-│   ├── mqttService.ts            ← Serviço de conexão MQTT
-│   └── style.css                 ← Estilos globais
-├── index.html                    ← Dashboard de Status (tempo real)
-├── analise.html                  ← Análise Temporal com Filtros (tempo real)
-├── relatorios.html               ← Geração e Export de Relatórios
-├── detalhes_camara.html          ← Detalhe por Câmara (tempo real)
-├── ajustes.html                 ← Configurações, Perfil e Gestão de Câmaras
-├── historico_alertas.html        ← Feed de Alertas
-├── nova_camara.html              ← Formulário de Cadastro/Edição de Câmara
-├── visualizacao_relatorio.html   ← Preview de Relatório Gerado
-├── login.html                    ← Tela de Login
-├── vite.config.ts                ← Configuração MPA do Vite
-└── vercel.json                  ← Roteamento limpo na Vercel
+│   ├── dataService.ts             ← Abstração de dados (Mock → MQTT-ready)
+│   └── style.css                  ← Estilos globais
+├── test/
+│   └── dataService.test.ts        ← Unit tests com Vitest
+├── index.html                     ← Dashboard de Status
+├── analise.html                   ← Análise Temporal com Filtros
+├── relatorios.html                ← Geração e Export de Relatórios
+├── detalhes_camara.html           ← Detalhe por Câmara (via ?id=CAM01)
+├── ajustes.html                   ← Configurações, Perfil e Gestão de Câmaras
+├── historico_alertas.html         ← Feed de Alertas
+├── nova_camara.html               ← Formulário de Cadastro/Edição de Câmara
+├── visualizacao_relatorio.html    ← Preview de Relatório Gerado
+├── login.html                     ← Tela de Login
+├── vite.config.ts                 ← Configuração MPA do Vite
+├── vitest.config.ts               ← Configuração de testes
+└── vercel.json                    ← Roteamento limpo na Vercel
 ```
 
 ---
@@ -80,14 +85,14 @@ gettemp_app_ts/
 
 | Tela | URL | Status | Dados Dinâmicos |
 |---|---|---|---|
-| Dashboard | `/` | ✅ Funcional | ✅ Câmaras do mock |
-| Análise | `/analise` | ✅ Funcional | ✅ Filtros & PDF |
-| Relatórios | `/relatorios` | ✅ Funcional | ✅ CSV/JSON/PDF |
-| Detalhes Câmara | `/detalhes_camara?id=CAM01` | ✅ Funcional | ✅ Gráfico + Logs |
+| Dashboard | `/` | ✅ Funcional | ✅ Câmaras do mock + debug panel |
+| Análise | `/analise` | ✅ Funcional | ✅ Filtros, Gráfico & Insights |
+| Relatórios | `/relatorios` | ✅ Funcional | ✅ Período, CSV/JSON/PDF |
+| Detalhes Câmara | `/detalhes_camara?id=CAM01` | ✅ Funcional | ✅ Gráfico cinza + Logs |
 | Ajustes | `/ajustes` | ✅ Funcional | ✅ Câmaras, Perfil, Notificações |
 | Histórico Alertas | `/historico_alertas` | ✅ Funcional | ✅ Feed dinâmico |
-| Nova Câmara | `/nova_camara` | ✅ Funcional | ✅ CRUD de câmaras |
-| Visualização Relatório | `/visualizacao_relatorio` | ✅ Funcional | ✅ Dados reais + Empresa |
+| Nova Câmara | `/nova_camara` | ✅ Funcional | ✅ CRUD de câmaras (2 passos) |
+| Visualização Relatório | `/visualizacao_relatorio` | ✅ Funcional | ✅ Paginação, Impressão total |
 | Login | `/login` | ✅ Funcional | ✅ Autenticação mock |
 
 ---
@@ -99,6 +104,8 @@ gettemp_app_ts/
 - Cards dinâmicos para cada câmara identificada no mock
 - Badge de status (Seguro / Aviso / Offline) calculado dinamicamente
 - Barra de progresso por câmara
+- **Debug Panel**: mostra contagem de dispositivos conectados e chat de payloads MQTT
+- **Animação de temperatura**: gradiente visual que muda conforme a temperatura
 - Navegação para `/detalhes_camara?id=<device_id>`
 - Bottom NavBar e Top AppBar injetados via `main.ts`
 - Avatar do perfil com iniciais dinâmicas no header
@@ -107,11 +114,13 @@ gettemp_app_ts/
 - Dropdown de seleção de câmara populado dinamicamente com IDs do mock
 - Filtros temporais (24h / 7d / 30d) com cálculo real sobre timestamps
 - Estatísticas (Máx, Mín, Média) recalculadas a cada filtro
-- Gráfico SVG dinâmico responsivo aos dados filtrados
-- Log de Alertas populado dos dados (apenas quando `temp >= -15` ou `Disconnected`)
+- **Gráfico SVG dinâmico** responsivo aos dados filtrados
+- **Painel de Insights**: análise automática baseada nos dados (ex: alertas, tendências)
+- Log de Alertas populado dos dados (apenas quando `temp >= limite` ou `Disconnected`)
 - **Botão "Baixar PDF"**: gera janela limpa com apenas o log de alertas e invoca `window.print()`
 
 ### ✅ Relatórios (`relatorios.html`)
+- **Seleção de período**: filtros de 24h, 7 dias, 30 dias e 90 dias
 - Data Inicial e Data Final preenchidas automaticamente com bounds reais do mock
 - Seleção de tipo de relatório com estado visual (Resumo Semanal / Auditoria / Histórico)
 - Checkboxes de customização (Incluir Gráficos / Incluir Logs) com estado rastreado
@@ -136,7 +145,7 @@ gettemp_app_ts/
 
 ### ✅ Ajustes (`ajustes.html`)
 - **Gestão de Câmaras**: lista dinâmica de câmaras registradas
-- **Criar Câmara**: botão "Nova Câmara" abre formulário multipassos
+- **Criar Câmara**: botão "Nova Câmara" abre formulário simplificado
 - **Editar Câmara**: menu de contexto (⋮) com opção de edição
 - **Remover Câmara**: exclusão com animação e atualização do localStorage
 - **Editar Perfil**: modal com campos de Nome, Email, Cargo, Empresa, Localização e CNPJ
@@ -146,24 +155,53 @@ gettemp_app_ts/
 - **Logout**: botão "Sair" remove token e redireciona para login
 
 ### ✅ Nova Câmara (`nova_camara.html`)
-- Formulário multipassos (3 etapas): Identificação → Rede → Confirmação
-- **Validação de campos obrigatórios**: Nome, Localização, IP, ID do dispositivo
-- **Sliders de temperatura**: Min/Max com feedback visual em tempo real
+- **Formulário simplificado** (2 etapas): Identificação → Confirmação
+- **Validação de campos obrigatórios**: Nome, Localização, ID do dispositivo
+- **Sliders de temperatura**: Min/Max com range expandido (-50°C a +50°C)
 - **Modo de Edição**: pré-popula formulário com dados existentes via `?edit=<device_id>`
 - **Persistência**: dados salvos em localStorage (key: `gettemp_cameras`)
 - **Feedback visual**: mensagem de sucesso personalizada para criação/edição
 
 ### ✅ Visualização de Relatório (`visualizacao_relatorio.html`)
-- Dados dinâmicos populados do mock com filtros por câmara
+- Dados dinâmicos populados do mock com filtros por câmara e período
 - Estatísticas (Máx, Mín, Média) calculadas em tempo real
-- Gráfico de barras com indicador de temperatura média
-- **Informações da Empresa**: exibidas no relatório (nome, localização, CNPJ)
-- Exporto via `window.print()` para PDF
+- **KPIs profissionais**: cards com métricas consolidadas
+- **Gráfico de barras** com indicador de temperatura média
+- **Informações da Empresa**: exibidas nos relatórios (nome, localização, CNPJ)
+- **Paginação**: 20 registros por página com navegação
+- **Impressão completa**: todos os registrosIncluded no PDF gerado
+- Export via `window.print()` para PDF
 
 ### ✅ Histórico de Alertas (`historico_alertas.html`)
-- Feed dinâmico filtrado por alertas (temp >= -15 ou Disconnected)
+- Feed dinâmico filtrado por alertas (temp >= limite configurável ou Disconnected)
 - Busca por texto
 - Filtros por categoria (Todos / Temperatura / Offline)
+
+---
+
+## 🚀 Novidades Recentes
+
+### v1.3.0 (Abril 2026)
+
+- **Seleção de período nos relatórios**: filtros de 24h, 7 dias, 30 dias e 90 dias
+- **Paginação na tabela de registros**: navegação entre páginas com botões anterior/próximo
+- **Correção de dados inválidos**: filtra temperaturas NaN/undefined que Quebravam gráficos
+- **Melhorias no gráfico de detalhes**: estilo minimalista em tons de cinza, eixo Y com labels, alinhamento correto
+- **Impressão completa**: ao gerar PDF, todos os registros são impressos (não apenas a página atual)
+- **Mock data automático**: fallback de dados quando localStorage está vazio
+- **Integração MQTT**: dados em tempo real do ESP32 via EMQX Cloud
+
+### v1.2.0 (Abril 2026)
+
+- **Limites de temperatura configuráveis por câmara**: sliders de -50°C a +50°C
+- **Debug Panel MQTT**: visualize dispositivos conectados e payloads em tempo real
+- **Simplificação do cadastro**: de 3 para 2 passos no formulário de câmaras
+- **Preenchimento automático**: edição de câmaras pré-popula dados do localStorage
+- **Testes unitários**: 12 testes com Vitest para dataService.ts
+- **Melhorias visuais**:
+  - Animação de gradiente na temperatura do dashboard
+  - Insights dinâmicos na página de análise
+  - KPIs profissionais nos relatórios
 
 ---
 
@@ -239,6 +277,8 @@ gettemp_app_ts/
 - [ ] Temperatura de cada card corresponde ao último registro do mock para aquela câmara
 - [ ] Badge de status ("Seguro" / "Aviso" / "Offline") reflete o estado do mock
 - [ ] Clique no card navega para `/detalhes_camara?id=CAM01` ou `CAM02`
+- [ ] Debug panel exibe contagem de dispositivos conectados
+- [ ] Debug panel exibe payloads MQTT recebidos
 
 ### 📈 Análise (`/analise`)
 
@@ -249,7 +289,8 @@ gettemp_app_ts/
 - [ ] Botão "7d" filtra registros corretamente
 - [ ] Botão "30d" filtra registros corretamente
 - [ ] Botão ativo do filtro fica visualmente destacado
-- [ ] Log de Alertas exibe apenas registros com `temp >= -15` ou `Disconnected`
+- [ ] Painel de Insights exibe análise baseada nos dados
+- [ ] Log de Alertas exibe apenas registros com `temp >= limite` ou `Disconnected`
 - [ ] **Botão "Baixar PDF"** abre janela limpa com log de alertas e dispara `window.print()`
 
 ### 📄 Relatórios (`/relatorios`)
@@ -292,13 +333,17 @@ gettemp_app_ts/
 - [ ] Opção "Editar câmara" navega para `/nova_camara?edit=<id>`
 - [ ] Opção "Remover câmara" exclui a câmara com animação
 
-### 📱 Responsividade e Acessibilidade
+### 📱 Nova Câmara (`/nova_camara`)
 
-- [ ] Todas as telas são funcionais em mobile (375px)
-- [ ] Todas as telas são funcionais em tablet (768px)
-- [ ] Todas as telas são funcionais em desktop (1280px)
-- [ ] Fonte e contraste visível em todas as telas
-- [ ] Sem scroll horizontal indesejado
+- [ ] Sliders de temperatura permitem range de -50°C a +50°C
+- [ ] Editar câmara pré-popula dados do localStorage
+- [ ] Cadastro simplificado em 2 passos
+- [ ] Dados salvos corretamente em localStorage
+
+### 🧪 Testes Unitários
+
+- [ ] Executar `npm run test` sem erros
+- [ ] Todos os 12 testes passam
 
 ### ⚡ Performance
 
@@ -309,57 +354,30 @@ gettemp_app_ts/
 
 ---
 
-## Integração MQTT (Implementado)
+## Integração MQTT (Guia)
 
-O sistema agora suporta dados em tempo real via MQTT. Configure o broker na variável `MQTT_BROKER_URL` em `src/main.ts`:
+O arquivo `src/dataService.ts` está preparado para substituição do mock por MQTT:
 
 ```typescript
-// No início do arquivo src/main.ts
-const MQTT_BROKER_URL = 'wss://seu-broker:8084/mqtt';
+// 1. No dataService.ts, altere:
+const USE_MOCK = false; // de true para false
+
+// 2. Descomente e configure:
+const MQTT_CONFIG = {
+  brokerUrl: 'wss://seu-broker:8083/mqtt',
+  topic: 'coldchain/readings/#',
+  username: 'user',
+  password: 'pass',
+};
+
+// 3. Instale o pacote:
+// npm install mqtt
+
+// 4. Implemente o subscriber no bloco comentado em dataService.ts
+// O resto da aplicação (main.ts, todas as telas) funciona sem modificações.
 ```
 
-### Broker MQTT Compatíveis
-
-- **HiveMQ Cloud** (gratuito para testes): `wss://broker.hivemq.com:8884/mqtt`
-- **Mosquitto** com WebSocket habilitado
-- **AWS IoT Core**
-- Qualquer broker MQTT com suporte a WebSockets
-
-### Tópico e Formato da Mensagem
-
-O ESP32 deve publicar no tópico: `gettemp/<device_id>`
-
-```json
-{
-  "device_id": "CAM01",
-  "name": "Câmara Principal A-14",
-  "temp": -18.4,
-  "wifi_rssi": -65,
-  "connection": "Connected",
-  "date": "2026-03-20",
-  "time": "12:00:00"
-}
-```
-
-### Campos Opcionais
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `device_id` | string | ID único da câmara (obrigatório) |
-| `name` | string | Nome da câmara |
-| `temp` | number | Temperatura em °C (obrigatório) |
-| `wifi_rssi` | number | Sinal Wi-Fi em dBm |
-| `spiffs_usage` | number | Uso da memória SPIFFS (%) |
-| `free_heap` | number | Memória livre do ESP32 |
-| `uptime` | number | Tempo de operação em segundos |
-| `device_ip` | string | Endereço IP do dispositivo |
-| `connection` | string | Status: "Connected" ou "Disconnected" |
-
-### Status da Conexão MQTT
-
-Um indicador no header mostra o status da conexão:
-- **MQTT** (verde): Conectado ao ESP32
-- **DEMO** (cinza): Modo demo com dados simulados
+### Formato esperado da mensagem MQTT (mesmo schema do mock):
 
 ```json
 {
@@ -381,7 +399,7 @@ Um indicador no header mostra o status da conexão:
 ```bash
 # Clone o repositório
 git clone https://github.com/cleberfeitosa-id/get-temp-app.git
-cd get-temp-app/gettemp_app_ts
+cd get-temp-app
 
 # Instale dependências
 npm install
@@ -389,6 +407,9 @@ npm install
 # Inicie o servidor de desenvolvimento
 npm run dev
 # → Acesse http://localhost:5173
+
+# Execute testes unitários
+npm run test
 
 # Build para produção
 npm run build

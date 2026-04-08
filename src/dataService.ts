@@ -1,20 +1,28 @@
 /**
  * DATA SERVICE — Get Temp ColdChain App
- *
- * This module provides a unified abstraction for fetching sensor data.
- * Supports both mock data and real-time MQTT data from ESP32 devices.
- *
- * MQTT INTEGRATION:
- * 1. Configure MQTT broker URL in mqttService.ts or via mqttService.connect()
- * 2. ESP32 should publish to topic: gettemp/<device_id>
- * 3. Message format: {"device_id":"CAM01","name":"Câmara 1","temp":-18.5,...}
- *
- * The data service merges mock data with real-time MQTT data,
- * prioritizing the most recent readings.
+ * 
+ * MQTT integration for real-time sensor data from ESP32 devices.
  */
 
-import { mqttService, MQTT_CONFIG } from './mqttService.ts';
+import mqtt from 'mqtt';
 
+// Interface for MQTT data (short field names from ESP32)
+export interface MqttReading {
+  name: string;
+  uid: string;
+  did: string;
+  dip: string;
+  temp: number;
+  spiffs: number;
+  rssi: number;
+  heap: number;
+  up: number;
+  date: string;
+  time: string;
+  conn: 'connected' | 'offline' | 'overheating' | 'spiffs_warning';
+}
+
+// Interface expected by frontend (long field names)
 export interface SensorReading {
   name: string;
   unique_reading_id: string;
@@ -27,161 +35,350 @@ export interface SensorReading {
   uptime: number;
   date: string;
   time: string;
-  connection: 'Connected' | 'Disconnected';
+  connection: 'Connected' | 'Disconnected' | 'Overheating' | 'SPIFFS_Warning';
 }
 
-// --- Data Source Configuration ---
-const MOCK_URL = '/mock/esp32_mock.json';
+// --- MQTT Configuration ---
+const USE_MOCK = false;
 
-// --- Internal caches ---
-let _mockCache: SensorReading[] | null = null;
-let _realtimeReadings: Map<string, SensorReading> = new Map();
-let _allReadings: SensorReading[] = [];
+// Your EMQX Cloud:
+const MQTT_CONFIG = {
+  brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
+  topic: 'gettemp',
+  username: 'gettemp',
+  password: 'gettemp123',
+};
 
-// --- Event listeners for real-time updates ---
-type RealtimeListener = (readings: SensorReading[]) => void;
-const _realtimeListeners: Set<RealtimeListener> = new Set();
+// Test with wildcard - uncomment if needed:
+// const MQTT_CONFIG = {
+//   brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
+//   topic: 'gettemp/#',
+//   username: 'gettemp',
+//   password: 'gettemp123',
+// };
 
-/**
- * Subscribe to real-time reading updates
- */
-export function onRealtimeUpdate(callback: RealtimeListener): () => void {
-  _realtimeListeners.add(callback);
-  // Immediately call with current data
-  callback(getAllReadings());
-  // Return unsubscribe function
-  return () => _realtimeListeners.delete(callback);
+// --- Convert MQTT data to frontend format ---
+function convertToSensorReading(mqtt: MqttReading): SensorReading {
+  let connection: SensorReading['connection'] = 'Disconnected';
+  if (mqtt.conn === 'connected') connection = 'Connected';
+  else if (mqtt.conn === 'overheating') connection = 'Overheating';
+  else if (mqtt.conn === 'spiffs_warning') connection = 'SPIFFS_Warning';
+  
+  return {
+    name: mqtt.name,
+    unique_reading_id: mqtt.uid,
+    device_id: mqtt.did,
+    device_ip: mqtt.dip,
+    temp: mqtt.temp,
+    spiffs_usage: mqtt.spiffs,
+    wifi_rssi: mqtt.rssi,
+    free_heap: mqtt.heap,
+    uptime: mqtt.up,
+    date: mqtt.date,
+    time: mqtt.time,
+    connection,
+  };
 }
 
-/**
- * Notify all listeners of data update
- */
-function notifyRealtimeUpdate(): void {
-  const readings = getAllReadings();
-  _realtimeListeners.forEach(cb => cb(readings));
+// --- Internal state ---
+let _mqttClient: mqtt.MqttClient | null = null;
+let _readings: SensorReading[] = [];
+let _listeners: ((readings: SensorReading[]) => void)[] = [];
+let _mqttInitialized = false;
+const LAST_COMM_KEY = 'gettemp_last_communication';
+const OFFLINE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+// Update last communication timestamp
+export function updateLastCommunication(): void {
+  localStorage.setItem(LAST_COMM_KEY, Date.now().toString());
 }
 
-/**
- * Initialize MQTT connection
- */
-export function initMQTT(config?: { brokerUrl?: string; topic?: string; username?: string; password?: string }): void {
-  if (config?.brokerUrl) {
-    MQTT_CONFIG.brokerUrl = config.brokerUrl;
-    MQTT_CONFIG.topic = config.topic || MQTT_CONFIG.topic;
-    MQTT_CONFIG.username = config.username || MQTT_CONFIG.username;
-    MQTT_CONFIG.password = config.password || MQTT_CONFIG.password;
+// Get time since last communication
+export function getTimeSinceLastComm(): number {
+  const lastComm = localStorage.getItem(LAST_COMM_KEY);
+  if (!lastComm) return Infinity;
+  return Date.now() - parseInt(lastComm);
+}
+
+// Check if system is offline based on timeout
+export function isSystemOffline(): boolean {
+  return getTimeSinceLastComm() > OFFLINE_TIMEOUT_MS;
+}
+
+// Export internal state for data management
+export function getInternalReadings(): SensorReading[] {
+  return _readings;
+}
+
+export function clearAllReadings(): void {
+  _readings = [];
+  localStorage.removeItem(STORAGE_KEY);
+  notifyListeners();
+}
+
+export function deleteReadingById(uniqueReadingId: string): boolean {
+  console.log('[DataService] Attempting to delete reading:', uniqueReadingId);
+  console.log('[DataService] Current readings before delete:', _readings.length);
+  
+  const index = _readings.findIndex(r => r.unique_reading_id === uniqueReadingId);
+  console.log('[DataService] Found at index:', index);
+  
+  if (index >= 0) {
+    const removed = _readings.splice(index, 1);
+    console.log('[DataService] Removed:', removed[0]);
+    saveToStorage();
+    notifyListeners();
+    console.log('[DataService] Readings after delete:', _readings.length);
+    return true;
   }
-
-  mqttService.onData((reading: SensorReading) => {
-    console.log('[DataService] New MQTT reading:', reading.device_id, reading.temp + '°C');
-    
-    // Store the real-time reading
-    _realtimeReadings.set(reading.device_id, reading);
-    
-    // Merge with existing readings (replace older readings from same device)
-    const existingIndex = _allReadings.findIndex(r => 
-      r.unique_reading_id === reading.unique_reading_id || 
-      (r.device_id === reading.device_id && r.date === reading.date && r.time === reading.time)
-    );
-    
-    if (existingIndex >= 0) {
-      _allReadings[existingIndex] = reading;
-    } else {
-      _allReadings.push(reading);
-    }
-    
-    // Notify all listeners
-    notifyRealtimeUpdate();
-  });
-
-  mqttService.onConnectionChange((connected: boolean) => {
-    console.log('[DataService] MQTT connection status:', connected ? 'Connected' : 'Disconnected');
-  });
-
-  mqttService.connect();
+  console.log('[DataService] Reading not found');
+  return false;
 }
 
-/**
- * Primary data access method.
- * Returns all sensor readings from the active data source.
- * When MQTT is connected, returns merged mock + real-time data.
- */
-export async function getReadings(): Promise<SensorReading[]> {
-  // If we have MQTT data, use it
-  if (mqttService.isConnected() || _realtimeReadings.size > 0) {
-    return getAllReadings();
-  }
+const STORAGE_KEY = 'gettemp_readings';
+const MAX_STORED_READINGS = 1000;
 
-  // Load from mock
-  if (_mockCache) return _mockCache;
+function getUserId(): string {
+  return localStorage.getItem('gettemp_user_id') || 'anonymous';
+}
 
+function saveToStorage() {
   try {
-    const res = await fetch(MOCK_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status} fetching mock data`);
-    _mockCache = await res.json();
-    return _mockCache!;
-  } catch (err) {
-    console.error('[DataService] Failed to load data:', err);
-    return [];
+    const userId = getUserId();
+    const dataToSave = {
+      userId,
+      readings: _readings,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+  } catch (e) {
+    console.warn('[DataService] Could not save to storage:', e);
   }
 }
 
-/**
- * Get all readings merged from mock and real-time sources
- */
-export function getAllReadings(): SensorReading[] {
-  const readings: SensorReading[] = [];
-  
-  // Add mock readings
-  if (_mockCache) {
-    readings.push(..._mockCache);
+function loadFromStorage(): SensorReading[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const currentUserId = getUserId();
+      
+      if ((parsed.userId === currentUserId || !parsed.userId) && parsed.readings) {
+        console.log('[DataService] Loaded', parsed.readings.length, 'readings from storage');
+        
+        // Remove duplicates based on unique_reading_id and invalid temps (85°C)
+        const seen = new Set<string>();
+        const uniqueReadings = parsed.readings.filter((r: SensorReading) => {
+          // Filter out 85°C (DS18B20 error code)
+          if (r.temp === 85 || r.temp < -55 || r.temp > 125) {
+            console.log('[DataService] Removing invalid reading:', r.unique_reading_id, r.temp);
+            return false;
+          }
+          if (seen.has(r.unique_reading_id)) {
+            console.log('[DataService] Removing duplicate:', r.unique_reading_id);
+            return false;
+          }
+          seen.add(r.unique_reading_id);
+          return true;
+        });
+        
+        console.log('[DataService] Unique readings after cleanup:', uniqueReadings.length);
+        return uniqueReadings;
+      }
+    }
+  } catch (e) {
+    console.warn('[DataService] Could not load from storage:', e);
   }
   
-  // Add real-time readings (override mock data for same device)
-  const seen = new Set<string>();
+  // Fallback: load mock data synchronously if no storage
+  console.log('[DataService] No stored data, loading mock data synchronously...');
+  return getSyncMockData();
+}
+
+function getSyncMockData(): SensorReading[] {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
   
-  // Sort by timestamp, most recent first
-  readings.sort((a, b) => {
-    const timeA = new Date(`${a.date}T${a.time}`).getTime();
-    const timeB = new Date(`${b.date}T${b.time}`).getTime();
-    return timeB - timeA;
+  // Generate readings for today
+  const hours = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+  const mins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45];
+  const cam01Temps = [-18.4, -18.2, -17.8, -18.5, -19.1, -18.9, -18.3, -17.5, -18.0, -18.7];
+  
+  const cam01Readings = hours.map((h, i) => ({
+    name: 'Câmara Principal A-14',
+    unique_reading_id: `mock-cam01-${i}`,
+    device_id: 'CAM01',
+    device_ip: '192.168.1.101',
+    temp: cam01Temps[i],
+    spiffs_usage: 45 + i,
+    wifi_rssi: -65 + Math.floor(Math.random() * 5) - 2,
+    free_heap: 32000 - i * 100,
+    uptime: 3600 + i * 300,
+    date: todayStr,
+    time: `${h}:${mins[i].toString().padStart(2, '0')}:00`,
+    connection: 'Connected' as const
+  }));
+  
+  const cam02Readings = hours.slice(0, 5).map((h, i) => ({
+    name: 'Câmara Secundária B-02',
+    unique_reading_id: `mock-cam02-${i}`,
+    device_id: 'CAM02',
+    device_ip: '192.168.1.102',
+    temp: -22.1 + (Math.random() * 0.7 - 0.35),
+    spiffs_usage: 38 + i,
+    wifi_rssi: -70 + Math.floor(Math.random() * 5) - 2,
+    free_heap: 31000 - i * 100,
+    uptime: 7200 + i * 600,
+    date: todayStr,
+    time: `${h}:${(mins[i] + i * 10).toString().padStart(2, '0')}:00`,
+    connection: 'Connected' as const
+  }));
+  
+  return [...cam01Readings, ...cam02Readings];
+}
+
+// --- Initialize MQTT ---
+function initMQTT() {
+  if (_mqttInitialized) return;
+  _mqttInitialized = true;
+  
+  console.log('[DataService] Initializing MQTT...');
+  console.log('[DataService] Broker:', MQTT_CONFIG.brokerUrl);
+  console.log('[DataService] Topic:', MQTT_CONFIG.topic);
+  console.log('[DataService] Username:', MQTT_CONFIG.username);
+  
+  try {
+    _mqttClient = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+      username: MQTT_CONFIG.username,
+      password: MQTT_CONFIG.password,
+      clean: true,
+      connectTimeout: 10000,
+      reconnectPeriod: 5000,
+    });
+  } catch (err) {
+    console.error('[DataService] MQTT connection error:', err);
+  }
+  
+  if (_mqttClient) {
+  _mqttClient.on('connect', () => {
+    console.log('[DataService] ✓ MQTT Connected to broker!');
+    console.log('[DataService] Subscribing to:', MQTT_CONFIG.topic);
+    _mqttClient?.subscribe(MQTT_CONFIG.topic);
   });
   
-  // Mark seen readings (avoid duplicates)
-  readings.forEach(r => seen.add(`${r.device_id}_${r.date}_${r.time}`));
+  _mqttClient.on('subscribe', (granted) => {
+    console.log('[DataService] Subscribed:', granted);
+  });
   
-  // Add/update with real-time readings (they are more recent)
-  _realtimeReadings.forEach((reading, deviceId) => {
-    const key = `${deviceId}_${reading.date}_${reading.time}`;
-    const existingIndex = readings.findIndex(r => 
-      `${r.device_id}_${r.date}_${r.time}` === key
-    );
-    
-    if (existingIndex >= 0) {
-      readings[existingIndex] = reading;
-    } else {
-      readings.unshift(reading);
+  _mqttClient.on('message', (topic, payload) => {
+    try {
+      const mqttReading: MqttReading = JSON.parse(payload.toString());
+      console.log('[DataService] Received MQTT message:', topic, mqttReading);
+      
+      // Validate temperature - filter out invalid readings (85°C is a common error code from DS18B20)
+      if (mqttReading.temp === 85 || mqttReading.temp < -55 || mqttReading.temp > 125) {
+        console.warn('[DataService] Invalid temperature reading filtered:', mqttReading.temp);
+        return;
+      }
+      
+      // Convert to frontend format
+      const reading = convertToSensorReading(mqttReading);
+      console.log('[DataService] Converted reading:', reading);
+      
+      // Update last communication timestamp
+      updateLastCommunication();
+      
+      // Check if reading already exists (avoid duplicates from ESP32 re-sending)
+      const existingIndex = _readings.findIndex(r => r.unique_reading_id === reading.unique_reading_id);
+      if (existingIndex >= 0) {
+        console.log('[DataService] Reading already exists, updating...');
+        _readings[existingIndex] = reading;
+      } else {
+        console.log('[DataService] Adding new reading:', reading.unique_reading_id);
+        _readings.push(reading);
+      }
+      
+      // Keep only last 1000 readings
+      if (_readings.length > MAX_STORED_READINGS) {
+        _readings = _readings.slice(-MAX_STORED_READINGS);
+      }
+      
+      // Save to localStorage for persistence
+      saveToStorage();
+      
+      // Notify listeners
+      notifyListeners();
+    } catch (err) {
+      console.error('[DataService] Error processing MQTT message:', err);
     }
   });
   
-  return readings;
+  _mqttClient.on('error', (err) => {
+    console.error('[DataService] MQTT error:', err.message);
+  });
+  
+  _mqttClient.on('offline', () => {
+    console.log('[DataService] MQTT offline');
+  });
+  
+  _mqttClient.on('reconnect', () => {
+    console.log('[DataService] MQTT reconnecting...');
+  });
+  }
+}
+
+// --- Notify all listeners ---
+function notifyListeners() {
+  _listeners.forEach(fn => fn([..._readings]));
+}
+
+// --- Public API ---
+
+/**
+ * Subscribe to sensor readings updates.
+ */
+export function onReadingsUpdate(callback: (readings: SensorReading[]) => void): () => void {
+  _listeners.push(callback);
+  
+  // Immediately call with current data (load if needed)
+  if (_readings.length === 0) {
+    _readings = loadFromStorage();
+  }
+  
+  if (_readings.length > 0) {
+    console.log('[onReadingsUpdate] Sending', _readings.length, 'readings to callback');
+    callback([..._readings]);
+  } else {
+    console.log('[onReadingsUpdate] No readings available yet');
+  }
+  
+  // Return unsubscribe function
+  return () => {
+    _listeners = _listeners.filter(fn => fn !== callback);
+  };
 }
 
 /**
- * Get latest reading for a specific device (prioritizes real-time)
+ * Get all sensor readings.
+ * Also initializes MQTT connection if not already done.
  */
-export function getLatestReading(deviceId: string): SensorReading | undefined {
-  // Check real-time first
-  const realtime = _realtimeReadings.get(deviceId);
-  if (realtime) return realtime;
-  
-  // Fall back to mock data
-  if (_mockCache) {
-    const readings = filterByChamber(_mockCache, deviceId);
-    return readings[readings.length - 1];
+export function getReadings(): Promise<SensorReading[]> {
+  // Load from storage if empty
+  if (_readings.length === 0) {
+    _readings = loadFromStorage();
+    console.log('[DataService] Loaded from storage, count:', _readings.length);
+  } else {
+    console.log('[DataService] Using existing in-memory readings, count:', _readings.length);
   }
   
-  return undefined;
+  if (!_mqttClient) {
+    console.log('[DataService] Initializing MQTT from getReadings...');
+    initMQTT();
+  }
+  
+  console.log('[DataService] Returning readings:', _readings.length);
+  
+  return Promise.resolve(_readings);
 }
 
 /**
@@ -198,21 +395,14 @@ export function filterByChamber(data: SensorReading[], deviceId: string): Sensor
 export function filterByDays(data: SensorReading[], days: number): SensorReading[] {
   if (data.length === 0) return data;
   
-  // Find the most recent timestamp from real-time readings first
-  let latestTime = 0;
-  _realtimeReadings.forEach(r => {
-    const time = new Date(`${r.date}T${r.time}`).getTime();
-    if (time > latestTime) latestTime = time;
-  });
-  
-  // If no real-time, use mock data
-  if (latestTime === 0) {
-    const timestamps = data.map(d => new Date(`${d.date}T${d.time}`).getTime());
-    latestTime = Math.max(...timestamps);
-  }
-  
+  const timestamps = data.map(d => new Date(`${d.date}T${d.time}`).getTime());
+  const latestTime = Math.max(...timestamps);
   const cutoff = latestTime - days * 24 * 60 * 60 * 1000;
-  return data.filter(d => new Date(`${d.date}T${d.time}`).getTime() >= cutoff);
+  
+  return data.filter(d => {
+    const ts = new Date(`${d.date}T${d.time}`).getTime();
+    return ts >= cutoff;
+  });
 }
 
 /**
@@ -221,71 +411,80 @@ export function filterByDays(data: SensorReading[], days: number): SensorReading
 export function getDateBounds(data: SensorReading[]): { min: Date; max: Date } | null {
   if (data.length === 0) return null;
   
-  // Check real-time readings first
-  let latestTime = 0;
-  let earliestTime = Infinity;
-  
-  _realtimeReadings.forEach(r => {
-    const time = new Date(`${r.date}T${r.time}`).getTime();
-    if (time > latestTime) latestTime = time;
-    if (time < earliestTime) earliestTime = time;
-  });
-  
-  // Merge with mock data
-  data.forEach(d => {
-    const time = new Date(`${d.date}T${d.time}`).getTime();
-    if (time > latestTime) latestTime = time;
-    if (time < earliestTime) earliestTime = time;
-  });
-  
+  const timestamps = data.map(d => new Date(`${d.date}T${d.time}`).getTime());
   return { 
-    min: new Date(earliestTime === Infinity ? Date.now() - 7*24*60*60*1000 : earliestTime), 
-    max: new Date(latestTime || Date.now()) 
+    min: new Date(Math.min(...timestamps)), 
+    max: new Date(Math.max(...timestamps)) 
   };
 }
 
 /**
- * Get unique device IDs from dataset (includes both mock and real-time).
+ * Get unique device IDs from dataset.
  */
 export function getUniqueDevices(data: SensorReading[]): string[] {
-  const devices = new Set<string>();
-  
-  // From data
-  data.forEach(d => devices.add(d.device_id));
-  
-  // From real-time readings
-  _realtimeReadings.forEach((_, deviceId) => devices.add(deviceId));
-  
-  return [...devices];
+  return [...new Set(data.map(d => d.device_id))];
 }
 
 /**
  * Calculate temperature statistics for a reading set.
  */
 export function calcStats(data: SensorReading[]): { max: number; min: number; avg: number } {
-  if (data.length === 0) return { max: 0, min: 0, avg: 0 };
-  
-  const temps = data.map(d => d.temp);
+  const temps = data.map(d => d.temp).filter(t => !isNaN(t));
+  if (temps.length === 0) {
+    return { max: 0, min: 0, avg: 0 };
+  }
   return {
     max: Math.max(...temps),
     min: Math.min(...temps),
-    avg: temps.reduce((a, b) => a + b, 0) / temps.length,
+    avg: temps.reduce((a, b) => a + b, 0) / temps.length
   };
 }
 
 /**
- * Check if MQTT is connected
+ * Get temperature limits for a specific device from localStorage.
+ * Returns default values if not configured.
  */
-export function isMQTTConnected(): boolean {
-  return mqttService.isConnected();
+export function getDeviceLimits(deviceId: string): { min: number; max: number } {
+  const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+  const camera = storedCameras[deviceId];
+  
+  if (camera) {
+    return {
+      min: parseFloat(camera.temp_min) || -25,
+      max: parseFloat(camera.temp_max) || -15
+    };
+  }
+  
+  // Default limits if not configured
+  return { min: -25, max: -15 };
 }
 
 /**
- * Get connection status info
+ * Check if a reading is within safe limits for a device.
  */
-export function getConnectionStatus(): { mqtt: boolean; mock: boolean } {
-  return {
-    mqtt: mqttService.isConnected(),
-    mock: _mockCache !== null,
-  };
+export function isWithinLimits(temp: number, deviceId: string): boolean {
+  const limits = getDeviceLimits(deviceId);
+  return temp >= limits.min && temp <= limits.max;
+}
+
+/**
+ * Get the latest reading for each device.
+ */
+export function getLatestByDevice(data: SensorReading[]): Map<string, SensorReading> {
+  const latest = new Map<string, SensorReading>();
+  
+  for (const reading of data) {
+    const existing = latest.get(reading.device_id);
+    if (!existing) {
+      latest.set(reading.device_id, reading);
+    } else {
+      const existingTs = new Date(`${existing.date}T${existing.time}`).getTime();
+      const readingTs = new Date(`${reading.date}T${reading.time}`).getTime();
+      if (readingTs > existingTs) {
+        latest.set(reading.device_id, reading);
+      }
+    }
+  }
+  
+  return latest;
 }

@@ -27,6 +27,10 @@ class MQTTSensorService {
   private connectionCallbacks: ConnectionCallback[] = [];
   private latestReadings: Map<string, SensorReading> = new Map();
   private useMQTT: boolean = false;
+  private messageQueue: SensorReading[] = [];
+  private processingQueue: boolean = false;
+  private readonly MAX_QUEUE_SIZE = 500;
+  private readonly QUEUE_STORAGE_KEY = 'gettemp_mqtt_queue';
 
   /**
    * Initialize MQTT connection
@@ -35,6 +39,9 @@ class MQTTSensorService {
     if (config) {
       Object.assign(MQTT_CONFIG, config);
     }
+
+    // Load any queued messages from localStorage
+    this.loadQueueFromStorage();
 
     // If no broker URL configured, skip MQTT
     if (!MQTT_CONFIG.brokerUrl) {
@@ -62,6 +69,9 @@ class MQTTSensorService {
         this.connected = true;
         this.useMQTT = true;
         this.notifyConnectionChange(true);
+        
+        // Process any queued messages from offline period
+        this.processQueue();
         
         // Subscribe to temperature topic
         this.client.subscribe(MQTT_CONFIG.topic, { qos: 0 }, (err: any) => {
@@ -147,6 +157,17 @@ class MQTTSensorService {
         // Handle both formats: app uses connection, ESP32 uses conn
         connection: this.determineConnection(data),
       };
+
+      // Validate temperature for outliers (typical cold chain: -40°C to +30°C)
+      const MIN_TEMP = -40;
+      const MAX_TEMP = 30;
+      if (reading.temp < MIN_TEMP || reading.temp > MAX_TEMP) {
+        console.warn(`[MQTT] Outlier detected: ${reading.temp}°C (outside ${MIN_TEMP} to ${MAX_TEMP}°C range) - marking as potential error`);
+        reading.temp = reading.temp; // Keep the value but log warning
+        // Optionally flag as outlier
+        (reading as any).isOutlier = true;
+        (reading as any).outlierReason = `Temperature ${reading.temp}°C is outside valid range (${MIN_TEMP} to ${MAX_TEMP}°C)`;
+      }
 
       console.log(`[MQTT] Parsed reading: ${reading.device_id} - ${reading.temp}°C`);
       return reading;
@@ -241,6 +262,114 @@ class MQTTSensorService {
 
   private notifyConnectionChange(connected: boolean): void {
     this.connectionCallbacks.forEach(cb => cb(connected));
+  }
+
+  // --- Message Queue Management for Offline Support ---
+  
+  /**
+   * Add reading to queue (for offline support)
+   */
+  queueReading(reading: SensorReading): void {
+    if (this.messageQueue.length >= this.MAX_QUEUE_SIZE) {
+      // Remove oldest when queue is full
+      this.messageQueue.shift();
+    }
+    this.messageQueue.push(reading);
+    this.saveQueueToStorage();
+    console.log(`[MQTT] Queued reading. Queue size: ${this.messageQueue.length}`);
+  }
+
+  /**
+   * Process queued messages (call when connection is restored)
+   */
+  async processQueue(): Promise<void> {
+    if (this.processingQueue || !this.isConnected() || this.messageQueue.length === 0) {
+      return;
+    }
+
+    this.processingQueue = true;
+    console.log(`[MQTT] Processing queue of ${this.messageQueue.length} messages...`);
+
+    const queueCopy = [...this.messageQueue];
+    this.messageQueue = [];
+    this.saveQueueToStorage();
+
+    for (const reading of queueCopy) {
+      // Re-validate before processing
+      if (this.isValidReading(reading)) {
+        this.latestReadings.set(reading.device_id, reading);
+        this.notifyDataReceived(reading);
+        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between messages
+      } else {
+        console.warn(`[MQTT] Skipping invalid queued reading: ${reading.unique_reading_id}`);
+      }
+    }
+
+    this.processingQueue = false;
+    console.log('[MQTT] Queue processing complete');
+  }
+
+  /**
+   * Validate a reading before processing
+   */
+  private isValidReading(reading: SensorReading): boolean {
+    if (!reading || typeof reading.temp !== 'number') return false;
+    
+    // Temperature range validation
+    const MIN_TEMP = -40;
+    const MAX_TEMP = 30;
+    if (reading.temp < MIN_TEMP || reading.temp > MAX_TEMP) {
+      console.warn(`[MQTT] Invalid temperature in queued reading: ${reading.temp}°C`);
+      return false;
+    }
+    
+    // Must have device_id
+    if (!reading.device_id) return false;
+    
+    return true;
+  }
+
+  /**
+   * Save queue to localStorage for persistence
+   */
+  private saveQueueToStorage(): void {
+    try {
+      localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.messageQueue));
+    } catch (e) {
+      console.warn('[MQTT] Could not save queue to storage:', e);
+    }
+  }
+
+  /**
+   * Load queue from localStorage on initialization
+   */
+  loadQueueFromStorage(): void {
+    try {
+      const stored = localStorage.getItem(this.QUEUE_STORAGE_KEY);
+      if (stored) {
+        this.messageQueue = JSON.parse(stored);
+        console.log(`[MQTT] Loaded ${this.messageQueue.length} queued messages from storage`);
+      }
+    } catch (e) {
+      console.warn('[MQTT] Could not load queue from storage:', e);
+      this.messageQueue = [];
+    }
+  }
+
+  /**
+   * Get current queue size
+   */
+  getQueueSize(): number {
+    return this.messageQueue.length;
+  }
+
+  /**
+   * Clear the queue
+   */
+  clearQueue(): void {
+    this.messageQueue = [];
+    this.saveQueueToStorage();
+    console.log('[MQTT] Queue cleared');
   }
 }
 

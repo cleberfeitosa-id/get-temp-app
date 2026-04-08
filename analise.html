@@ -118,38 +118,117 @@
 <!-- Bento Grid: Stats & Analytics -->
 <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6">
 <!-- Main Chart Panel -->
-<div class="md:col-span-4 lg:col-span-8 bg-gradient-to-br from-primary to-primary-container rounded-lg p-6 md:p-8 relative overflow-hidden flex flex-col justify-between min-h-[420px]">
-<div class="absolute inset-0 opacity-10" data-alt="Subtle geometric grid pattern for background depth" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
-<div class="relative z-10 flex justify-between items-start">
+<div class="md:col-span-4 lg:col-span-8 bg-gradient-to-br from-primary via-primary-container to-surface-container-low rounded-2xl p-6 md:p-8 relative overflow-hidden flex flex-col min-h-[480px]">
+<div class="absolute inset-0 opacity-30" style="background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0); background-size: 20px 20px;"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-6">
 <div>
-<h3 class="font-headline text-2xl md:text-3xl font-bold text-on-primary leading-tight">Tendência de Desempenho</h3>
-<p class="text-on-primary/70 font-body">Mapeamento de estabilidade térmica em tempo real</p>
+<h3 class="font-headline text-2xl md:text-3xl font-bold text-on-primary leading-tight">Tendência de Temperatura</h3>
+<p class="text-on-primary/70 font-body text-sm">Variação histórica em tempo real</p>
 </div>
 <div class="text-right">
-<div class="font-headline text-4xl md:text-5xl font-bold text-on-primary mb-1">2.4°C</div>
-<div class="flex items-center gap-1 justify-end text-on-primary/80">
-<span class="material-symbols-outlined text-sm" data-icon="trending_down">trending_down</span>
-<span class="text-xs font-bold uppercase tracking-wider">Ideal</span>
+<div class="font-headline text-4xl md:text-5xl font-bold text-on-primary mb-1" id="chart-current-temp">--°C</div>
+<div class="flex items-center gap-2 justify-end">
+<span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+<span class="text-xs font-bold uppercase tracking-wider text-on-primary/80">Tempo Real</span>
 </div>
 </div>
 </div>
-<!-- Abstract Line Chart Visualization -->
-<div class="relative h-48 mt-8">
-<svg class="w-full h-full overflow-visible" viewbox="0 0 400 100">
+
+<!-- Dynamic Chart Container -->
+<div id="chart-container" class="relative h-64 mt-2">
+<svg id="main-chart" class="w-full h-full" viewbox="0 0 800 240" preserveAspectRatio="none">
 <defs>
-<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-<stop offset="0%" stop-color="white" stop-opacity="0.3"></stop>
-<stop offset="100%" stop-color="white" stop-opacity="0"></stop>
-</lineargradient>
+<linearGradient id="tempGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#006399" stop-opacity="0.4"></stop>
+<stop offset="50%" stop-color="#006399" stop-opacity="0.15"></stop>
+<stop offset="100%" stop-color="#006399" stop-opacity="0.02"></stop>
+</linearGradient>
+<linearGradient id="limitGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#ffb702" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#ffb702" stop-opacity="0"></stop>
+</linearGradient>
+<filter id="glow">
+<feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+<feMerge>
+<feMergeNode in="coloredBlur"/>
+<feMergeNode in="SourceGraphic"/>
+</feMerge>
+</filter>
 </defs>
-<path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10 L 400 100 L 0 100 Z" fill="url(#chartGradient)"></path>
-<path d="M0 80 Q 50 75, 80 50 T 150 60 T 220 30 T 300 45 T 400 10" fill="none" stroke="white" stroke-linecap="round" stroke-width="3"></path>
-<circle id="chart-peak-circle" cx="0" cy="0" fill="#ffb702" r="4" class="transition-all duration-300"></circle>
-<text id="chart-peak-text" fill="white" font-family="Space Grotesk" font-size="6" text-anchor="middle" x="0" y="0" class="transition-all duration-300 text-[10px] uppercase font-bold tracking-widest">PICO</text>
+
+<!-- Grid Lines -->
+<g id="grid-lines" class="opacity-20"></g>
+
+<!-- Safe Range Zone -->
+<rect id="safe-zone" fill="url(#limitGradient)" opacity="0.15" rx="4"></rect>
+
+<!-- Limit Lines -->
+<line id="limit-max-line" stroke="#ffb702" stroke-width="2" stroke-dasharray="8,4" opacity="0.6"></line>
+<line id="limit-min-line" stroke="#006399" stroke-width="2" stroke-dasharray="8,4" opacity="0.6"></line>
+
+<!-- Area Fill -->
+<path id="chart-area" fill="url(#tempGradient)" stroke="none"></path>
+
+<!-- Main Line -->
+<path id="chart-line" fill="none" stroke="#006399" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"></path>
+
+<!-- Data Points -->
+<g id="data-points"></g>
+
+<!-- Peak Indicator (Maximum) -->
+<g id="peak-indicator" class="opacity-0 transition-opacity duration-300">
+<circle r="8" fill="#ffb702" opacity="0.3"></circle>
+<circle r="4" fill="#ffb702"></circle>
+</g>
+
+<!-- Valley Indicator (Minimum) -->
+<g id="valley-indicator" class="opacity-0 transition-opacity duration-300">
+<circle r="8" fill="#06b6d4" opacity="0.3"></circle>
+<circle r="4" fill="#06b6d4"></circle>
+</g>
+
+<!-- Current Point -->
+<g id="current-point" class="transition-all duration-500">
+<circle r="6" fill="#006399" stroke="white" stroke-width="2"></circle>
+</g>
+
+<!-- Tooltip -->
+<g id="chart-tooltip" class="opacity-0 transition-opacity duration-200" pointer-events="none">
+<rect x="0" y="0" width="120" height="50" rx="8" fill="white" stroke="#e0e3e5" stroke-width="1" filter="url(#glow)"></rect>
+<text id="tooltip-temp" x="60" y="22" text-anchor="middle" class="font-headline text-lg font-bold fill-on-surface">--°C</text>
+<text id="tooltip-time" x="60" y="38" text-anchor="middle" class="font-label text-xs fill-on-surface-variant">--:--</text>
+</g>
 </svg>
+
+<!-- Y-Axis Labels -->
+<div id="y-axis-labels" class="absolute left-0 top-0 h-full w-16 flex flex-col justify-between pointer-events-none py-2">
+  <span class="text-xs font-bold text-slate-700" id="y-max">--°C</span>
+  <span class="text-xs font-bold text-slate-700" id="y-mid">--°C</span>
+  <span class="text-xs font-bold text-slate-700" id="y-min">--°C</span>
 </div>
-<div id="chart-x-axis" class="flex justify-between text-on-primary/50 text-[10px] font-bold font-label tracking-widest uppercase mt-4">
+</div>
+
+<!-- X-Axis Labels -->
+<div id="chart-x-axis" class="flex justify-between text-slate-600 text-xs font-bold font-label tracking-widest uppercase mt-3 px-12">
 <!-- Injetado dinamicamente -->
+</div>
+
+<!-- Legend -->
+<div class="flex items-center justify-center gap-8 mt-4 text-xs font-bold">
+<div class="flex items-center gap-2">
+<span class="w-4 h-1 bg-[#006399] rounded-full"></span>
+<span class="text-slate-700">Temperatura</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-4 h-1 bg-[#f97316] rounded-full border-dashed border-t border-[#f97316]"></span>
+<span class="text-slate-700">Limite Máximo</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-4 h-1 bg-[#06b6d4] rounded-full border-dashed border-t border-[#06b6d4]"></span>
+<span class="text-slate-700">Limite Mínimo</span>
+</div>
+</div>
 </div>
 </div>
 <!-- Stats Cards Column -->
@@ -185,61 +264,33 @@
 </div>
 </div>
 </div>
-<!-- Alert Log (Full Width Row) -->
-<div class="md:col-span-4 lg:col-span-12 glass-panel rounded-lg p-8 border border-outline-variant/10 shadow-sm">
-<div class="flex justify-between items-center mb-8">
+</div>
+</div>
+</div>
+
+<!-- Insights & Alert Logs Section -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Insights Panel -->
+<div class="lg:col-span-4 glass-panel rounded-xl p-6 border border-outline-variant/10 shadow-sm">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">insights</span>
+<h3 class="font-headline text-xl font-bold text-on-background">Insights em Tempo Real</h3>
+</div>
+<div id="analytics-insights" class="space-y-3 text-sm">
+<div class="text-on-surface-variant italic">Analisando dados...</div>
+</div>
+</div>
+
+<!-- Alert Log Panel -->
+<div class="lg:col-span-8 glass-panel rounded-xl p-6 border border-outline-variant/10 shadow-sm">
+<div class="flex justify-between items-center mb-6">
 <div>
 <h3 class="font-headline text-2xl font-bold text-on-background">Log de Limites de Alerta</h3>
 <p class="text-on-surface-variant text-sm">Violações históricas de limites de segurança</p>
 </div>
 </div>
-<div class="space-y-4">
-<!-- Log Item 1 -->
-<div class="flex items-center gap-6 p-4 rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low transition-colors group">
-<div class="w-12 h-12 rounded-full bg-tertiary-container/30 flex items-center justify-center flex-shrink-0">
-<span class="material-symbols-outlined text-tertiary" data-icon="warning">warning</span>
-</div>
-<div class="flex-grow grid grid-cols-2 lg:grid-cols-4 items-center gap-x-8 gap-y-4">
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Timestamp</span>
-<span class="font-bold text-on-background">24 Out, 14:22</span>
-</div>
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Evento</span>
-<span class="font-bold text-tertiary">Aumento Crítico</span>
-</div>
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Valor de Pico</span>
-<span class="font-bold text-on-background">8.4°C</span>
-</div>
-<div class="text-right">
-<span class="px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-extrabold uppercase tracking-widest">Resolvido</span>
-</div>
-</div>
-</div>
-<!-- Log Item 2 -->
-<div class="flex items-center gap-6 p-4 rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low transition-colors group">
-<div class="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center flex-shrink-0">
-<span class="material-symbols-outlined text-secondary" data-icon="notifications_active">notifications_active</span>
-</div>
-<div class="flex-grow grid grid-cols-2 lg:grid-cols-4 items-center gap-x-8 gap-y-4">
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Timestamp</span>
-<span class="font-bold text-on-background">23 Out, 09:15</span>
-</div>
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Evento</span>
-<span class="font-bold text-secondary">Desvio do Sensor</span>
-</div>
-<div>
-<span class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-0.5">Valor de Pico</span>
-<span class="font-bold text-on-background">5.2°C</span>
-</div>
-<div class="text-right">
-<span class="px-3 py-1 rounded-full bg-outline-variant/30 text-on-surface-variant text-[10px] font-extrabold uppercase tracking-widest">Auto-correção</span>
-</div>
-</div>
-</div>
+<div id="alert-logs-container" class="space-y-3">
+<!-- Dynamic logs injected here -->
 </div>
 </div>
 </div>

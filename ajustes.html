@@ -116,7 +116,7 @@
 <section class="space-y-6">
 <div class="flex justify-between items-center">
 <h3 class="font-headline text-2xl font-bold tracking-tight">Câmaras Registradas</h3>
-<button class="flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95">
+<button onclick="window.location.href='nova_camara.html'" class="flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95">
 <span class="material-symbols-outlined" data-icon="add">add</span>
                     Nova Câmara
                 </button>
@@ -230,7 +230,7 @@
 </div>
 </div>
 <label class="relative inline-flex items-center cursor-pointer">
-<input checked="" class="sr-only peer" type="checkbox"/>
+<input id="toggle-critical-alerts" checked="" class="sr-only peer" type="checkbox"/>
 <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
@@ -246,10 +246,49 @@
 </div>
 </div>
 <label class="relative inline-flex items-center cursor-pointer">
-<input checked="" class="sr-only peer" type="checkbox"/>
+<input id="toggle-daily-summary" checked="" class="sr-only peer" type="checkbox"/>
 <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
+
+<!-- Daily Summary Configuration -->
+<div id="daily-summary-config" class="bg-surface-container-lowest glass-panel p-6 rounded-lg mt-4 hidden">
+<div class="flex items-center gap-4 mb-4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="summarize">summarize</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Resumos Diários</h5>
+<p class="text-xs text-on-surface-variant">Configure quando receber os relatórios</p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase mb-2">Horário do Envio</label>
+<input type="time" id="daily-summary-time" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2 text-on-surface" value="08:00"/>
+</div>
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase mb-2">Dia da Semana</label>
+<select id="daily-summary-day" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2 text-on-surface">
+<option value="all">Todos os dias</option>
+<option value="1">Segunda-feira</option>
+<option value="2">Terça-feira</option>
+<option value="3">Quarta-feira</option>
+<option value="4">Quinta-feira</option>
+<option value="5">Sexta-feira</option>
+<option value="6">Sábado</option>
+<option value="0">Domingo</option>
+</select>
+</div>
+</div>
+<button id="btn-save-daily-summary" class="mt-4 px-4 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity">
+Salvar Configuração
+</button>
+<div class="mt-3 p-3 bg-blue-50 rounded-lg">
+<p class="text-xs text-blue-700">Um relatório será gerado no formato do Relatório de Qualidade Térmica e enviado para o e-mail cadastrado.</p>
+</div>
+</div>
+
 <!-- Preference Item 3 -->
 <div class="bg-surface-container-lowest glass-panel p-6 rounded-lg flex items-center justify-between group hover:bg-white transition-all">
 <div class="flex items-center gap-4">
@@ -262,9 +301,126 @@
 </div>
 </div>
 <label class="relative inline-flex items-center cursor-pointer">
-<input class="sr-only peer" type="checkbox"/>
+<input id="toggle-maintenance" class="sr-only peer" type="checkbox"/>
 <div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
+</div>
+
+<!-- Maintenance Reminder Configuration -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg mt-4">
+<div class="flex items-center gap-4 mb-4">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined" data-icon="build">build</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Lembretes de Manutenção</h5>
+<p class="text-xs text-on-surface-variant">Configure quando deseja receber alertas de manutenção</p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase mb-2">Próxima Manutenção</label>
+<input type="date" id="maintenance-date" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2 text-on-surface"/>
+</div>
+<div>
+<label class="block text-xs font-bold text-on-surface-variant uppercase mb-2">Periodicidade</label>
+<select id="maintenance-period" class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2 text-on-surface">
+<option value="once">Uma vez</option>
+<option value="7">A cada 7 dias</option>
+<option value="30">A cada 30 dias</option>
+<option value="90">A cada 90 dias</option>
+<option value="180">A cada 6 meses</option>
+<option value="365">A cada ano</option>
+</select>
+</div>
+</div>
+<button id="btn-save-maintenance" class="mt-4 px-4 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity">
+Salvar Lembrete
+</button>
+</div>
+
+<!-- Active Maintenance Reminders -->
+<div id="maintenance-reminders" class="mt-4 space-y-2">
+<!-- Populated by JS -->
+</div>
+</div>
+</section>
+<!-- Advanced Settings - Data Management -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<div class="md:col-span-4">
+<h3 class="font-headline text-2xl font-bold tracking-tight">Gerenciamento de Dados</h3>
+<p class="text-on-surface-variant mt-2 text-sm leading-relaxed">
+Gerencie os dados coletados. Use com cautela - operações de exclusão são irreversíveis.
+</p>
+</div>
+<div class="md:col-span-8 space-y-4">
+<!-- Reset Historical Data -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="restart_alt">restart_alt</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Resetar Leituras Históricas</h5>
+<p class="text-xs text-on-surface-variant">Remove todas as leituras armazenadas. Requer confirmação.</p>
+</div>
+</div>
+<button id="btn-reset-readings" class="px-4 py-2 rounded-full bg-error text-white text-sm font-bold hover:opacity-90 transition-opacity">
+Resetar
+</button>
+</div>
+
+<!-- Delete Individual Reading -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="delete">delete</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Excluir Leitura Específica</h5>
+<p class="text-xs text-on-surface-variant">Remover uma leitura pelo ID. Requer confirmação.</p>
+</div>
+</div>
+<button id="btn-delete-reading" class="px-4 py-2 rounded-full bg-error text-white text-sm font-bold hover:opacity-90 transition-opacity">
+Excluir
+</button>
+</div>
+</div>
+
+<!-- Download Exclusion History -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Baixar Histórico de Exclusões</h5>
+<p class="text-xs text-on-surface-variant">Exporta log completo de operações de exclusão (apenas leitura).</p>
+</div>
+</div>
+<button id="btn-download-exclusions" class="px-4 py-2 rounded-full bg-primary text-white text-sm font-bold hover:opacity-90 transition-opacity">
+Baixar
+</button>
+</div>
+</div>
+
+<!-- Operation Logs -->
+<div class="bg-surface-container-lowest glass-panel p-6 rounded-lg">
+<div class="flex items-center gap-4 mb-3">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+</div>
+<div>
+<h5 class="font-bold text-on-surface">Histórico de Operações</h5>
+<p class="text-xs text-on-surface-variant">Log de resets e exclusões realizadas.</p>
+</div>
+</div>
+<div id="operation-logs" class="max-h-40 overflow-y-auto text-xs space-y-1 text-on-surface-variant">
+<p class="italic">Nenhuma operação registrada.</p>
+</div>
 </div>
 </div>
 </section>
@@ -322,6 +478,52 @@
   <button class="w-full text-left px-4 py-3 text-sm font-medium hover:bg-surface-container-low flex items-center gap-3 text-error">
     <span class="material-symbols-outlined text-error text-base">delete</span>Remover câmara
   </button>
+</div>
+
+<!-- Confirm Reset Modal -->
+<div id="confirm-reset-modal" class="fixed inset-0 z-[300] hidden flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById('confirm-reset-modal').classList.add('hidden')"></div>
+  <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+    <div class="flex items-center gap-3 text-error">
+      <span class="material-symbols-outlined text-3xl">warning</span>
+      <h3 class="font-headline text-xl font-bold">Confirmar Reset</h3>
+    </div>
+    <p class="text-on-surface-variant text-sm">Esta ação irá excluir TODAS as leituras históricas. Esta operação não pode ser desfeita.</p>
+    <div class="bg-error-container p-4 rounded-lg">
+      <p class="text-xs text-on-surface-variant mb-2">Para confirmar, digite:</p>
+      <p class="font-mono font-bold text-error text-lg">quero resetar</p>
+    </div>
+    <input id="reset-confirm-input" type="text" class="w-full bg-surface-container-low border-2 border-error rounded-xl px-4 py-3 text-on-surface font-mono" placeholder="Digite 'quero resetar' para confirmar"/>
+    <div class="flex gap-3">
+      <button onclick="document.getElementById('confirm-reset-modal').classList.add('hidden')" class="flex-1 py-3 rounded-full border border-outline-variant text-on-surface font-semibold hover:bg-surface-container transition-colors">Cancelar</button>
+      <button id="btn-confirm-reset" class="flex-1 py-3 rounded-full bg-error text-white font-bold hover:opacity-90 transition-opacity" disabled>Confirmar Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Reading Modal -->
+<div id="confirm-delete-modal" class="fixed inset-0 z-[300] hidden flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById('confirm-delete-modal').classList.add('hidden')"></div>
+  <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+    <div class="flex items-center gap-3 text-error">
+      <span class="material-symbols-outlined text-3xl">delete_forever</span>
+      <h3 class="font-headline text-xl font-bold">Excluir Leitura</h3>
+    </div>
+    <p class="text-on-surface-variant text-sm">Esta ação excluirá uma leitura específica. Esta operação não pode ser desfeita.</p>
+    <div class="space-y-2">
+      <label class="block text-xs font-bold text-on-surface-variant uppercase">ID da Leitura (unique_reading_id)</label>
+      <input id="delete-reading-id" type="text" class="w-full bg-surface-container-low border-2 border-error rounded-xl px-4 py-3 text-on-surface font-mono text-sm" placeholder="Ex: 1775536354-00:4B:12:30:05:7C"/>
+    </div>
+    <div class="bg-error-container p-4 rounded-lg">
+      <p class="text-xs text-on-surface-variant mb-2">Para confirmar, digite:</p>
+      <p class="font-mono font-bold text-error text-lg">quero excluir</p>
+    </div>
+    <input id="delete-confirm-input" type="text" class="w-full bg-surface-container-low border-2 border-error rounded-xl px-4 py-3 text-on-surface font-mono" placeholder="Digite 'quero excluir' para confirmar"/>
+    <div class="flex gap-3">
+      <button onclick="document.getElementById('confirm-delete-modal').classList.add('hidden')" class="flex-1 py-3 rounded-full border border-outline-variant text-on-surface font-semibold hover:bg-surface-container transition-colors">Cancelar</button>
+      <button id="btn-confirm-delete" class="flex-1 py-3 rounded-full bg-error text-white font-bold hover:opacity-90 transition-opacity" disabled>Confirmar Exclusão</button>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="/src/main.ts"></script>

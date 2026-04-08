@@ -6,7 +6,6 @@
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
       tailwind.config = {
         darkMode: "class",
@@ -59,7 +58,9 @@
               "error": "#ba1a1a",
               "on-secondary-container": "#6b4b00",
               "tertiary": "#934b00",
-              "on-secondary-fixed": "#271900"
+              "on-secondary-fixed": "#271900",
+              "success": "#2e7d32",
+              "warning": "#ed6c02"
             },
             fontFamily: {
               "headline": ["Space Grotesk"],
@@ -80,129 +81,359 @@
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
       }
-      
+      .report-gradient {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      }
       @media print {
         body { margin: 0 !important; padding: 0 !important; background-color: white !important; }
-        header, nav, button { display: none !important; }
+        header, nav, button, .no-print { display: none !important; }
         * { box-shadow: none !important; }
         ::-webkit-scrollbar { display: none; }
+        .page-break { page-break-before: always; }
       }
     </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-  </head>
-<body class="bg-background text-on-background min-h-screen">
-<!-- TopAppBar -->
-
-<main class="flex-grow flex flex-col items-center px-4 py-8 pb-36 max-w-4xl mx-auto w-full">
-<!-- Document Meta -->
-<div class="w-full mb-6 flex items-center justify-between px-2">
-<div>
-<p class="font-label text-xs uppercase tracking-widest text-outline">Arquivo</p>
-<h2 id="report-filename" class="font-headline font-bold text-lg text-on-surface">relatorio_gettemp.pdf</h2>
-</div>
-<span id="report-page-info" class="bg-surface-container-highest px-3 py-1 rounded-full text-xs font-bold text-on-surface-variant">PÁGINA 1 DE 1</span>
-</div>
-<!-- PDF Preview Area (Atmospheric Lens Style) -->
-<div class="w-full bg-surface-container-lowest rounded-lg shadow-[0_-12px_40px_rgba(25,28,30,0.04)] overflow-hidden relative border border-outline-variant/10">
-<!-- Glass Overlay decoration -->
-<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full blur-3xl pointer-events-none"></div>
-<div class="p-8 md:p-12 min-h-[1000px] flex flex-col">
-<!-- Report Header -->
-<div class="flex justify-between items-start mb-12 border-b border-surface-container-highest pb-8">
-  <div class="flex items-center gap-3">
-  <div class="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-  <span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">ac_unit</span>
+</head>
+<body class="report-gradient text-on-background min-h-screen">
+<main class="max-w-5xl mx-auto px-4 py-8 pb-36">
+<!-- Report Cover Page -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-200">
+<!-- Cover Header -->
+<div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-12 relative overflow-hidden">
+<div class="absolute inset-0 opacity-10" style="background-image: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+<div class="relative z-10">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-4">
+  <div class="w-16 h-16 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur">
+    <span class="material-symbols-outlined text-4xl text-white" style="font-variation-settings: 'FILL' 1;">ac_unit</span>
   </div>
   <div>
-  <p class="font-headline font-black italic text-primary leading-none">Get Temp</p>
-  <p class="text-[10px] font-bold tracking-tighter uppercase text-outline">Sistemas de Monitoramento</p>
-  </div>
-  </div>
-  <div class="text-right">
-  <p id="report-type-title" class="font-bold text-sm">Relatório de Desempenho Térmico</p>
-  <p id="report-date-generated" class="text-xs text-outline">Gerado em --</p>
+    <p class="font-headline text-3xl font-bold tracking-tight">GET TEMP</p>
+    <p class="text-slate-400 text-sm font-medium">Sistemas de Monitoramento Térmico</p>
   </div>
 </div>
-<!-- Company Info Section -->
-<div id="report-company-section" class="mb-8 p-4 bg-surface-container-low rounded-lg border border-outline-variant/10">
-  <p class="text-[10px] font-bold text-outline uppercase tracking-widest mb-2">Informações da Empresa</p>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="text-right">
+  <p class="text-xs text-slate-400 uppercase tracking-widest">Documento Oficial</p>
+  <p class="text-xl font-headline font-bold" id="report-filename">RL-2024-001</p>
+</div>
+</div>
+<div class="border-t border-white/20 pt-8">
+  <h1 class="font-headline text-4xl md:text-5xl font-bold mb-4" id="report-type-title">Relatório de Qualidade Térmica</h1>
+  <p class="text-slate-300 text-lg max-w-2xl">Análise comprehensive de desempenho térmico para cadeia de frio - Setor de Alimentos Refrigerados e Congelados</p>
+</div>
+</div>
+</div>
+
+<!-- Company & Report Info -->
+<div class="p-8 md:p-12 bg-white">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+<div class="p-6 bg-slate-50 rounded-xl border border-slate-200">
+  <div class="flex items-center gap-2 mb-4">
+    <span class="material-symbols-outlined text-primary">business</span>
+    <p class="font-bold text-sm uppercase tracking-wider text-slate-500">Informações da Empresa</p>
+  </div>
+  <div class="space-y-3">
     <div>
-      <p class="font-headline font-bold text-on-surface" id="report-company-name">--</p>
-      <p class="text-xs text-on-surface-variant">Empresa</p>
+      <p class="font-headline text-xl font-bold text-slate-900" id="report-company-name">--</p>
+      <p class="text-xs text-slate-500">Razão Social</p>
     </div>
-    <div>
-      <p class="font-headline font-bold text-on-surface" id="report-company-location">--</p>
-      <p class="text-xs text-on-surface-variant">Localização</p>
-    </div>
-    <div>
-      <p class="font-headline font-bold text-on-surface" id="report-company-cnpj">--</p>
-      <p class="text-xs text-on-surface-variant">CNPJ</p>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <p class="font-bold text-slate-700" id="report-company-location">--</p>
+        <p class="text-[10px] text-slate-400 uppercase">Localização</p>
+      </div>
+      <div>
+        <p class="font-bold text-slate-700" id="report-company-cnpj">--</p>
+        <p class="text-[10px] text-slate-400 uppercase">CNPJ</p>
+      </div>
     </div>
   </div>
 </div>
-<!-- Abstract Chart Visualization (The Atmospheric Lens) -->
-<div id="report-chart-section" class="mb-12 relative h-48 w-full bg-surface-container-low rounded-lg overflow-hidden flex items-end px-4 gap-[2px]">
-<div id="dynamic-chart-container" class="w-full h-full flex items-end gap-[1px]"></div>
-<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-<div class="bg-surface-container-highest/80 backdrop-blur-md px-4 py-2 rounded-full border border-outline-variant/20 flex items-center gap-2 shadow-lg">
-<span class="material-symbols-outlined text-outline text-sm">trending_up</span>
-<span class="text-xs font-bold text-on-surface">MÉDIA GLOBAL: <span id="report-avg-temp" class="text-primary ml-1">--°C</span></span>
+<div class="p-6 bg-slate-50 rounded-xl border border-slate-200">
+  <div class="flex items-center gap-2 mb-4">
+    <span class="material-symbols-outlined text-primary">calendar_month</span>
+    <p class="font-bold text-sm uppercase tracking-wider text-slate-500">Período do Relatório</p>
+  </div>
+  <div class="space-y-3">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="font-headline text-xl font-bold text-slate-900" id="report-date-range">-- a --</p>
+        <p class="text-xs text-slate-400">Data de Geração</p>
+      </div>
+      <div class="text-right">
+        <p class="text-sm text-slate-500" id="report-date-generated">Gerado em --</p>
+        <p class="text-[10px] text-slate-400 uppercase">Versão 1.0</p>
+      </div>
+    </div>
+  </div>
 </div>
 </div>
 </div>
-<!-- Summary Data Grid -->
-<div id="report-stats-grid" class="grid grid-cols-2 gap-6 mb-12">
-<div class="p-4 bg-surface-container rounded-md">
-<p class="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Máxima Registrada</p>
-<p id="report-max-temp" class="font-headline text-xl font-bold text-on-surface">--°C</p>
-<p id="report-max-date" class="text-[10px] text-tertiary font-bold">--</p>
 </div>
-<div class="p-4 bg-surface-container rounded-md">
-<p class="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Mínima Registrada</p>
-<p id="report-min-temp" class="font-headline text-xl font-bold text-on-surface">--°C</p>
-<p id="report-min-date" class="text-[10px] text-primary font-bold">--</p>
+
+<!-- Executive Summary -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-200">
+<div class="p-8 md:p-12">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">summarize</span>
+<h2 class="font-headline text-2xl font-bold text-slate-900">Resumo Executivo</h2>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+<div class="p-5 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+  <div class="flex items-center justify-between mb-2">
+    <span class="material-symbols-outlined text-blue-600">thermostat</span>
+    <span class="text-xs font-bold text-blue-600 bg-blue-200 px-2 py-0.5 rounded-full">MÉDIA</span>
+  </div>
+  <p class="font-headline text-3xl font-bold text-blue-900" id="report-avg-temp">--°C</p>
+  <p class="text-xs text-blue-700 mt-1">Temperatura Média</p>
+</div>
+<div class="p-5 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200">
+  <div class="flex items-center justify-between mb-2">
+    <span class="material-symbols-outlined text-red-600">keyboard_arrow_up</span>
+    <span class="text-xs font-bold text-red-600 bg-red-200 px-2 py-0.5 rounded-full">MÁX</span>
+  </div>
+  <p class="font-headline text-3xl font-bold text-red-900" id="report-max-temp">--°C</p>
+  <p class="text-xs text-red-700 mt-1" id="report-max-date">--</p>
+</div>
+<div class="p-5 bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl border border-cyan-200">
+  <div class="flex items-center justify-between mb-2">
+    <span class="material-symbols-outlined text-cyan-600">keyboard_arrow_down</span>
+    <span class="text-xs font-bold text-cyan-600 bg-cyan-200 px-2 py-0.5 rounded-full">MÍN</span>
+  </div>
+  <p class="font-headline text-3xl font-bold text-cyan-900" id="report-min-temp">--°C</p>
+  <p class="text-xs text-cyan-700 mt-1" id="report-min-date">--</p>
+</div>
+<div class="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl border border-emerald-200">
+  <div class="flex items-center justify-between mb-2">
+    <span class="material-symbols-outlined text-emerald-600">check_circle</span>
+    <span class="text-xs font-bold text-emerald-600 bg-emerald-200 px-2 py-0.5 rounded-full">STATUS</span>
+  </div>
+  <p class="font-headline text-3xl font-bold text-emerald-900" id="report-compliance">--%</p>
+  <p class="text-xs text-emerald-700 mt-1">Conformidade</p>
 </div>
 </div>
-<!-- Stylized Records Table -->
-<div id="report-logs-section" class="w-full overflow-hidden">
-<p id="report-table-title" class="font-headline font-bold text-md mb-4 text-on-surface">Registros do Período</p>
-<div id="report-records-table" class="space-y-4">
+</div>
+</div>
+
+<!-- Main Chart Section -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-200">
+<div class="p-8 md:p-12">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2">
+  <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">show_chart</span>
+  <h2 class="font-headline text-2xl font-bold text-slate-900">Análise de Temperatura</h2>
+</div>
+<div class="flex gap-2">
+  <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">Tempo Real</span>
+  <span class="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full" id="total-readings-badge">0 Leituras</span>
+</div>
+</div>
+
+<!-- Professional Chart -->
+<div id="report-chart-section" class="relative h-80 w-full bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+<svg id="report-main-chart" class="w-full h-full" viewbox="0 0 900 300" preserveAspectRatio="none">
+<defs>
+<linearGradient id="chartFillGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#006399" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#006399" stop-opacity="0.02"></stop>
+</linearGradient>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+<feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+</filter>
+</defs>
+<!-- Grid -->
+<g id="chart-grid" class="stroke-slate-200" stroke-width="1"></g>
+<!-- Safe Zone -->
+<rect id="safe-zone-rect" fill="#22c55e" fill-opacity="0.05" rx="4"></rect>
+<!-- Upper Limit Line -->
+<line id="limit-upper" stroke="#f97316" stroke-width="2" stroke-dasharray="6,3"></line>
+<!-- Lower Limit Line -->
+<line id="limit-lower" stroke="#06b6d4" stroke-width="2" stroke-dasharray="6,3"></line>
+<!-- Area -->
+<path id="chart-area-fill" fill="url(#chartFillGrad)"></path>
+<!-- Line -->
+<path id="chart-line-fill" fill="none" stroke="#006399" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)"></path>
+<!-- Points -->
+<g id="chart-points"></g>
+<!-- Peak Indicator (Maximum) -->
+<g id="report-peak-indicator" class="opacity-0">
+<circle r="8" fill="#ffb702" opacity="0.4"></circle>
+<circle r="4" fill="#ffb702"></circle>
+</g>
+<!-- Valley Indicator (Minimum) -->
+<g id="report-valley-indicator" class="opacity-0">
+<circle r="8" fill="#06b6d4" opacity="0.4"></circle>
+<circle r="4" fill="#06b6d4"></circle>
+</g>
+<!-- Current Point -->
+<g id="current-point-report">
+<circle r="6" fill="#006399" stroke="white" stroke-width="2"></circle>
+</g>
+</svg>
+
+<!-- Chart Legend -->
+<div class="absolute bottom-4 left-4 flex gap-4 text-xs font-bold">
+<div class="flex items-center gap-1">
+<span class="w-4 h-0.5 bg-[#006399]"></span>
+<span class="text-slate-600">Temperatura</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-4 h-0.5 bg-[#f97316] border-dashed border-t border-[#f97316]"></span>
+<span class="text-slate-600">Limite Sup.</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-4 h-0.5 bg-[#06b6d4] border-dashed border-t border-[#06b6d4]"></span>
+<span class="text-slate-600">Limite Inf.</span>
+</div>
+</div>
+
+<!-- Y-Axis Labels -->
+<div id="chart-y-labels" class="absolute left-2 top-2 bottom-16 w-12 flex flex-col justify-between text-[10px] font-bold text-slate-400 pointer-events-none">
+</div>
+
+<!-- X-Axis Labels -->
+<div id="report-x-axis" class="flex justify-between text-slate-500 text-[10px] font-bold uppercase mt-2 px-2">
+</div>
+</div>
+</div>
+</div>
+
+<!-- Detailed Analysis Section -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-200">
+<div class="p-8 md:p-12">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<h2 class="font-headline text-2xl font-bold text-slate-900">Análise Detalhada</h2>
+</div>
+
+<!-- Insights Panel -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+<div class="p-6 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200">
+<div class="flex items-center gap-2 mb-4">
+  <span class="material-symbols-outlined text-amber-600" style="font-variation-settings: 'FILL' 1;">lightbulb</span>
+  <p class="font-bold text-sm uppercase tracking-wider text-amber-800">Insights & Recomendações</p>
+</div>
+<div id="insights-container" class="space-y-3">
 <!-- Populated dynamically -->
-<div class="flex items-center justify-between py-2 border-b border-surface-container animate-pulse">
-<span class="text-sm font-medium bg-surface-container-high rounded w-32 h-4"></span>
-<span class="text-sm font-bold bg-surface-container-high rounded w-20 h-4"></span>
+</div>
+</div>
+<div class="p-6 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+<div class="flex items-center gap-2 mb-4">
+  <span class="material-symbols-outlined text-slate-600" style="font-variation-settings: 'FILL' 1;">history</span>
+  <p class="font-bold text-sm uppercase tracking-wider text-slate-600">Estatísticas do Período</p>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center py-2 border-b border-slate-200">
+  <span class="text-sm text-slate-600">Total de Leituras</span>
+  <span class="font-bold text-slate-900" id="stat-total-readings">--</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-slate-200">
+  <span class="text-sm text-slate-600">Dispositivos Ativos</span>
+  <span class="font-bold text-slate-900" id="stat-active-devices">--</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-slate-200">
+  <span class="text-sm text-slate-600">Tempo de Cobertura</span>
+  <span class="font-bold text-slate-900" id="stat-coverage">--</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-slate-200">
+  <span class="text-sm text-slate-600">Desvio Padrão</span>
+  <span class="font-bold text-slate-900" id="stat-stddev">--</span>
+</div>
+<div class="flex justify-between items-center py-2">
+  <span class="text-sm text-slate-600">Estabilidade</span>
+  <span class="font-bold text-slate-900" id="stat-stability">--</span>
 </div>
 </div>
 </div>
-<!-- Footer of Document -->
-<div class="mt-auto pt-12 text-center">
-<p class="text-[10px] text-outline italic">Este documento é confidencial e para uso exclusivo da administração Get Temp.</p>
 </div>
 </div>
+</div>
+
+<!-- Records Table -->
+<div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-200">
+<div class="p-8 md:p-12">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2">
+  <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">list_alt</span>
+  <h2 class="font-headline text-2xl font-bold text-slate-900">Registro de Eventos</h2>
+</div>
+<span class="text-xs text-slate-500" id="report-table-title">Últimas 20 leituras</span>
+</div>
+
+<div class="overflow-x-auto">
+<table class="w-full text-sm">
+<thead>
+<tr class="bg-slate-50 border-b border-slate-200">
+  <th class="text-left py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-500">Data/Hora</th>
+  <th class="text-left py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-500">Câmara</th>
+  <th class="text-right py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-500">Temperatura</th>
+  <th class="text-right py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-500">WiFi RSSI</th>
+  <th class="text-center py-3 px-4 font-bold text-xs uppercase tracking-wider text-slate-500">Status</th>
+</tr>
+</thead>
+<tbody id="report-records-table" class="divide-y divide-slate-100">
+<!-- Populated dynamically -->
+</tbody>
+</table>
+</div>
+<!-- Pagination Controls -->
+<div id="report-pagination" class="flex items-center justify-between mt-6 px-4">
+<div class="text-sm text-slate-500" id="pagination-info">
+Mostrando <span id="showing-start">1</span>-<span id="showing-end">20</span> de <span id="total-records">0</span> registros
+</div>
+<div class="flex items-center gap-2">
+<button id="pagination-prev" class="px-3 py-1 rounded-lg border border-slate-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button id="pagination-next" class="px-3 py-1 rounded-lg border border-slate-300 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Certification Footer -->
+<div class="bg-slate-900 text-white rounded-xl shadow-lg overflow-hidden mb-8 border border-slate-800">
+<div class="p-8 md:p-12">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+  <div class="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
+    <span class="material-symbols-outlined text-2xl text-white" style="font-variation-settings: 'FILL' 1;">verified</span>
+  </div>
+  <div>
+    <p class="font-headline text-xl font-bold">Certificação de Qualidade</p>
+    <p class="text-slate-400 text-sm">Este documento foi gerado automaticamente pelo sistema Get Temp</p>
+  </div>
+</div>
+<div class="text-right">
+  <p class="text-xs text-slate-400">Documento assinado digitalmente</p>
+  <p class="font-mono text-sm" id="doc-signature">GT-${Date.now()}</p>
+</div>
+</div>
+</div>
+
+<!-- Footer -->
+<div class="text-center py-8">
+<p class="text-xs text-slate-400">Este documento é confidencial e contém informações proprietárias. Reprodução não autorizada é proibida.</p>
+<p class="text-[10px] text-slate-300 mt-2">Get Temp © 2024 - Todos os direitos reservados | gettemp.io</p>
 </div>
 </main>
-<!-- Bottom Actions Bar -->
-<div class="fixed bottom-0 left-0 w-full z-50 px-4 pb-8 pt-4">
-<div class="max-w-xl mx-auto bg-white/60 dark:bg-slate-950/60 backdrop-blur-xl rounded-t-[2rem] border-t border-white/20 shadow-[0_-12px_40px_rgba(25,28,30,0.04)] p-6 flex items-center justify-center gap-4">
-<!-- Enviar por E-mail -->
-<button id="btn-email" class="flex-1 flex items-center justify-center gap-2 bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant font-['Manrope'] font-semibold py-4 px-4 rounded-full transition-all active:scale-95">
-<span class="material-symbols-outlined text-xl">mail</span>
-<span class="text-sm">E-mail</span>
+
+<!-- Action Bar -->
+<div class="fixed bottom-0 left-0 w-full z-50 px-4 pb-8 pt-4 no-print">
+<div class="max-w-3xl mx-auto bg-white/80 backdrop-blur-xl rounded-t-2xl border-t border-white/20 shadow-xl p-4 flex items-center justify-center gap-4">
+<button id="btn-email" class="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-3 px-6 rounded-full transition-all active:scale-95">
+  <span class="material-symbols-outlined">mail</span>
+  <span class="text-sm">Enviar por E-mail</span>
 </button>
-<!-- Baixar PDF -->
-<button id="btn-pdf" class="flex-[2] flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-['Manrope'] font-bold py-4 px-6 rounded-full shadow-lg shadow-primary/20 transition-all active:scale-95">
-<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">download</span>
-<span class="text-sm">Baixar PDF</span>
+<button id="btn-pdf" class="flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transition-all active:scale-95">
+  <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">download</span>
+  <span class="text-sm">Baixar PDF</span>
 </button>
 </div>
 </div>
-<!-- Background Decoration for Atmosphere -->
-<div class="fixed top-1/4 -left-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl -z-10"></div>
-<div class="fixed bottom-1/4 -right-20 w-64 h-64 bg-secondary-container/10 rounded-full blur-3xl -z-10"></div>
+
 <script type="module" src="/src/main.ts"></script>
 </body></html>

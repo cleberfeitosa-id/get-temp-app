@@ -1,14 +1,5 @@
 import './style.css';
-import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, getLatestReading, onRealtimeUpdate, initMQTT, getConnectionStatus, getAllReadings, type SensorReading } from './dataService.ts';
-
-// MQTT Broker URL - Configure this to match your ESP32 MQTT broker
-// EMQX Cloud with TLS: wss://r0112411.ala.us-east-1.emqxsl.com:8884/mqtt
-const MQTT_BROKER_URL = 'wss://r0112411.ala.us-east-1.emqxsl.com:8884/mqtt';
-
-// Initialize MQTT connection (will silently skip if no broker URL configured)
-if (MQTT_BROKER_URL) {
-  initMQTT({ brokerUrl: MQTT_BROKER_URL, topic: 'gettemp' });
-}
+import { getReadings, filterByChamber, filterByDays, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, getTimeSinceLastComm, type SensorReading } from './dataService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -19,9 +10,6 @@ const HeaderHTML = `
       <span class="material-symbols-outlined" id="header-icon">thermostat</span>
     </button>
     <span class="text-xl font-bold text-sky-900 font-['Space_Grotesk'] tracking-tight text-2xl">Get Temp</span>
-    <span id="mqtt-status-indicator" class="ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500" title="Status da conexão MQTT">
-      OFFLINE
-    </span>
   </div>
   <button id="header-profile-btn" onclick="window.location.href='ajustes.html'" class="w-11 h-11 rounded-full bg-sky-200 flex items-center justify-center text-sky-900 font-bold text-sm border-2 border-white shadow-sm cursor-pointer hover:bg-sky-300 hover:scale-105 transition-all duration-200" title="Acessar perfil">
     <span id="header-avatar-initials">TS</span>
@@ -83,40 +71,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Update header avatar initials from saved profile
   const savedName = localStorage.getItem('profile_name');
   if (savedName) {
-    const initials = savedName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+    const initials = savedName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     setTimeout(() => {
       const avatarEl = document.getElementById('header-avatar-initials');
       if (avatarEl) avatarEl.textContent = initials;
     }, 0);
   }
-
-  // Update MQTT status indicator
-  const updateMQTTStatus = () => {
-    const statusEl = document.getElementById('mqtt-status-indicator');
-    if (statusEl) {
-      const status = getConnectionStatus();
-      if (status.mqtt) {
-        statusEl.textContent = 'MQTT';
-        statusEl.className = 'ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700';
-        statusEl.title = 'Conectado ao ESP32 via MQTT';
-      } else {
-        statusEl.textContent = 'DEMO';
-        statusEl.className = 'ml-2 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500';
-        statusEl.title = 'Modo demo - Dados simulados';
-      }
-    }
-  };
-  setTimeout(updateMQTTStatus, 100);
-
-  // Listen for real-time updates to refresh dashboard
-  onRealtimeUpdate(() => {
-    updateMQTTStatus();
-    // Refresh dashboard data if on index page
-    if (isPage('index') || currentPath === '/') {
-      const refreshFn = (window as any).refreshDashboardData;
-      if (refreshFn) refreshFn();
-    }
-  });
 
   // --- Auth Logic (Login) ---
   if (onLoginPage) {
@@ -142,8 +102,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (email === 'admin@gettemp.io' && pwd === 'gettemp123') {
            if (remember) localStorage.setItem('authToken', 'demo-token-123');
-           else sessionStorage.setItem('authToken', 'demo-token-123'); // Fallback if not persisting, but simplify for demo:
-           localStorage.setItem('authToken', 'demo-token-123'); // Just use local storage for demo
+           else sessionStorage.setItem('authToken', 'demo-token-123');
+           localStorage.setItem('authToken', 'demo-token-123');
+           
+           // Generate unique user ID for data association
+           const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+           localStorage.setItem('gettemp_user_id', userId);
+           localStorage.setItem('gettemp_user_email', email);
+           
            window.location.href = 'index.html';
         } else {
            if (errorMsg) errorMsg.classList.remove('hidden');
@@ -176,85 +142,254 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Re-run dynamic script logic if on Dashboard (index.html)
   if (isPage('index') || currentPath === '/') {
-    // Function to refresh dashboard data (called on load and on real-time updates)
-    const refreshDashboardData = async () => {
-      const dataArray = await getReadings();
-      if (!dataArray || dataArray.length === 0) return;
+    // Subscribe to real-time updates for debug panel
+    const mqttChatEl = document.getElementById('mqtt-chat');
+    const mqttCountEl = document.getElementById('mqtt-count');
+    const connectedCountEl = document.getElementById('connected-count');
+    const connectedBarEl = document.getElementById('connected-bar');
+    let mqttMsgCount = 0;
+    
+    // Restore connected count from localStorage on page load
+    const storedConnectedCount = localStorage.getItem('gettemp_connected_count');
+    if (connectedCountEl && storedConnectedCount) {
+      connectedCountEl.textContent = storedConnectedCount;
+    }
+    if (connectedBarEl && storedConnectedCount) {
+      connectedBarEl.style.width = Math.min(100, parseInt(storedConnectedCount) * 50) + '%';
+    }
+    
+    onReadingsUpdate((readings) => {
+      if (!mqttChatEl || !mqttCountEl || !connectedCountEl || !connectedBarEl) return;
       
-      // Grab the most recent reading for CAM01 for the main dashboard
-      // Check real-time data first
-      const realtimeMain = getLatestReading('CAM01');
-      const mainData = realtimeMain || (() => {
-        const cam1Readings = filterByChamber(dataArray, 'CAM01');
-        return cam1Readings[cam1Readings.length - 1] || dataArray[0];
-      })();
+      // Get configured cameras from localStorage
+      const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
       
+      // Update connected count - only count truly Connected (not overheating, etc)
+      const uniqueDevices = getUniqueDevices(readings);
+      const connectedDevices = uniqueDevices.filter(id => {
+        const latest = readings.find(r => r.device_id === id);
+        return latest?.connection === 'Connected';
+      });
+      const count = connectedDevices.length;
+      connectedCountEl.textContent = count.toString();
+      connectedBarEl.style.width = Math.min(100, count * 50) + '%';
+      
+      // Persist connected count
+      localStorage.setItem('gettemp_connected_count', count.toString());
+      
+      // Get latest reading sorted by time
+      const sortedReadings = [...readings].sort((a, b) => {
+        const timeA = new Date(`${a.date}T${a.time}`).getTime();
+        const timeB = new Date(`${b.date}T${b.time}`).getTime();
+        return timeB - timeA;
+      });
+      const latest = sortedReadings[0];
+      if (!latest) return;
+      
+      // Update main display in real-time
       const camNameEl = document.getElementById('cam_name');
       const camTempEl = document.getElementById('cam_temp');
-      const sysStatusEl = document.getElementById('system_status');
-      const sysSpiffsEl = document.getElementById('system_spiffs');
-      const sysRssiEl = document.getElementById('system_rssi');
-
-      if(camNameEl) camNameEl.textContent = mainData.name || 'Câmara';
-      if(camTempEl) camTempEl.textContent = mainData.temp !== undefined ? Math.round(mainData.temp).toString() : '--';
-      if(sysStatusEl) sysStatusEl.textContent = mainData.connection === 'Connected' ? 'Sistema Normal' : 'Desconectado';
-      if(sysSpiffsEl) sysSpiffsEl.textContent = (mainData.spiffs_usage || 0) + '%';
-      if(sysRssiEl) sysRssiEl.textContent = (mainData.wifi_rssi || -50) + ' dBm';
+      const statusBadge = document.getElementById('status_badge');
+      const statusText = document.getElementById('status_text');
+      const lastUpdate = document.getElementById('last_update');
       
-      // Create trend grid for the chambers
-      const gridContainer = document.getElementById('dynamic-chambers-grid');
-      if (gridContainer) {
-          let gridHtml = '';
-          
-          // Unique devices
-          const uniqueDevices = getUniqueDevices(dataArray);
-          
-          for (let deviceId of uniqueDevices) {
-              // Check real-time data first
-              const latestRealtime = getLatestReading(deviceId);
-              const mockReadings = filterByChamber(dataArray, deviceId);
-              const latest = latestRealtime || mockReadings[mockReadings.length - 1];
-              
-              if (!latest) continue;
-              
-              const isSafe = latest.connection === 'Connected' && latest.temp < -15;
-              const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
-              const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
-              const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
-              
-              gridHtml += `
-              <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
-                  <div>
-                      <div class="flex justify-between items-start mb-3">
-                          <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${latest.name}</p>
-                          <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
-                      </div>
-                      <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
-                      <p class="text-[10px] text-slate-500 mt-1">${mockReadings.length} leituras em log</p>
-                  </div>
-                  <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
-                      <div class="h-full ${progressHue} w-[85%]"></div>
-                  </div>
-              </div>`;
-          }
-          
-          gridContainer.innerHTML = gridHtml + `
-              <div class="col-span-2 bg-white/60 backdrop-blur-md p-5 rounded-xl flex items-center justify-between px-8 ring-1 ring-black/5 mt-2 cursor-pointer" onclick="window.location.href='historico_alertas.html'">
-                  <div class="flex items-center gap-3">
-                      <span class="material-symbols-outlined text-amber-600">notification_important</span>
-                      <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${dataArray.length} entradas</span>
-                  </div>
-                  <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
-              </div>
-          `;
+      const deviceConfig = storedCameras[latest.device_id];
+      const displayName = deviceConfig?.name || latest.name || latest.device_id;
+      
+      if (camNameEl) camNameEl.textContent = displayName;
+      if (camTempEl) {
+        camTempEl.innerHTML = `${latest.temp.toFixed(1)}<span class="text-primary-container text-[5rem] align-top -mt-8">°C</span>`;
       }
-    };
-
-    // Expose for real-time updates
-    (window as any).refreshDashboardData = refreshDashboardData;
-
-    // Initial load
-    refreshDashboardData().catch(error => console.error('Error fetching data:', error));
+      
+      // Update status badge
+      if (statusBadge && statusText) {
+        statusBadge.className = 'inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2';
+        if (latest.connection === 'Connected') {
+          statusBadge.classList.add('bg-green-100', 'text-green-700');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span><span id="status_text">Estável</span>';
+        } else if (latest.connection === 'Overheating') {
+          statusBadge.classList.add('bg-error-container', 'text-error');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-error mr-1.5 animate-pulse"></span><span id="status_text">Superaquecimento</span>';
+        } else if (latest.connection === 'SPIFFS_Warning') {
+          statusBadge.classList.add('bg-tertiary-container', 'text-tertiary');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-tertiary mr-1.5 animate-pulse"></span><span id="status_text">SPIFFS Crítico</span>';
+        } else {
+          statusBadge.classList.add('bg-red-100', 'text-red-700');
+          statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span><span id="status_text">Offline</span>';
+        }
+      }
+      if (lastUpdate) lastUpdate.textContent = `Última atualização: ${latest.time}`;
+      
+      mqttMsgCount++;
+      mqttCountEl.textContent = mqttMsgCount + ' msgs';
+      
+      // Persist MQTT chat messages (max 50, keep 24 hours)
+      const chatMessages = JSON.parse(localStorage.getItem('gettemp_mqtt_chat') || '[]');
+      chatMessages.unshift({
+        device: displayName,
+        temp: latest.temp.toFixed(1),
+        rssi: latest.wifi_rssi,
+        spiffs: latest.spiffs_usage.toFixed(1),
+        heap: latest.free_heap,
+        connection: latest.connection,
+        time: new Date().toISOString()
+      });
+      
+      // Keep only last 50 messages and within 24 hours
+      const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+      const filteredMessages = chatMessages.filter((m: any) => new Date(m.time).getTime() > oneDayAgo).slice(0, 50);
+      localStorage.setItem('gettemp_mqtt_chat', JSON.stringify(filteredMessages));
+      
+      // Add to chat (max 5 visible) - show full payload with configured name
+      const chatItem = document.createElement('div');
+      chatItem.className = 'bg-surface-container px-2 py-1.5 rounded border-l-2 border-primary';
+      chatItem.innerHTML = `
+        <span class="text-primary font-bold">${displayName}:</span>
+        <span class="text-on-surface">${latest.temp.toFixed(1)}°C</span>
+        <span class="text-on-surface-variant">| RSSI: ${latest.wifi_rssi}dBm</span>
+        <span class="text-on-surface-variant">| SPIFFS: ${latest.spiffs_usage.toFixed(1)}%</span>
+        <span class="text-on-surface-variant">| Heap: ${latest.free_heap}</span>
+        <span class="text-tertiary font-bold ml-1">[${latest.connection}]</span>
+      `;
+      mqttChatEl.insertBefore(chatItem, mqttChatEl.firstChild);
+      
+      // Keep only last 5 visible
+      while (mqttChatEl.children.length > 5) {
+        mqttChatEl.removeChild(mqttChatEl.lastChild!);
+      }
+    });
+    
+    // Restore MQTT chat from localStorage on page load
+    const storedChat = JSON.parse(localStorage.getItem('gettemp_mqtt_chat') || '[]');
+    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+    const validStoredChat = storedChat.filter((m: any) => new Date(m.time).getTime() > oneDayAgo);
+    
+    mqttMsgCount = validStoredChat.length;
+    if (mqttCountEl) mqttCountEl.textContent = mqttMsgCount + ' msgs';
+    
+    if (mqttChatEl && validStoredChat.length > 0) {
+      mqttChatEl.innerHTML = '';
+      validStoredChat.slice(0, 5).forEach((m: any) => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'bg-surface-container px-2 py-1.5 rounded border-l-2 border-primary';
+        chatItem.innerHTML = `
+          <span class="text-primary font-bold">${m.device}:</span>
+          <span class="text-on-surface">${m.temp}°C</span>
+          <span class="text-on-surface-variant">| RSSI: ${m.rssi}dBm</span>
+          <span class="text-on-surface-variant">| SPIFFS: ${m.spiffs}%</span>
+          <span class="text-on-surface-variant">| Heap: ${m.heap}</span>
+          <span class="text-tertiary font-bold ml-1">[${m.connection}]</span>
+        `;
+        mqttChatEl.appendChild(chatItem);
+      });
+    }
+    
+    getReadings().then(dataArray => {
+        if (!dataArray || dataArray.length === 0) return;
+        
+        const camNameEl = document.getElementById('cam_name');
+        const camTempEl = document.getElementById('cam_temp');
+        const statusBadge = document.getElementById('status_badge');
+        const statusText = document.getElementById('status_text');
+        const lastUpdate = document.getElementById('last_update');
+        
+        // Get configured cameras from localStorage
+        const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+        
+        // Get unique devices and their latest readings
+        const uniqueDevices = getUniqueDevices(dataArray);
+        
+        // Find the most recent reading across all devices
+        const sortedReadings = [...dataArray].sort((a, b) => {
+          const timeA = new Date(`${a.date}T${a.time}`).getTime();
+          const timeB = new Date(`${b.date}T${b.time}`).getTime();
+          return timeB - timeA;
+        });
+        const latestReading = sortedReadings[0];
+        
+        if (!latestReading) return;
+        
+        // Get configured name for this device
+        const deviceConfig = storedCameras[latestReading.device_id];
+        const displayName = deviceConfig?.name || latestReading.name || latestReading.device_id;
+        
+        if (camNameEl) camNameEl.textContent = displayName;
+        
+        if (camTempEl) {
+          camTempEl.innerHTML = `${latestReading.temp.toFixed(1)}<span class="text-primary-container text-[5rem] align-top -mt-8">°C</span>`;
+        }
+        
+        // Update status badge dynamically
+        const connStatus = latestReading.connection;
+        if (statusBadge && statusText) {
+          statusBadge.className = 'inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2';
+          
+          if (connStatus === 'Connected') {
+            statusBadge.classList.add('bg-green-100', 'text-green-700');
+            statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span><span id="status_text">Estável</span>';
+          } else if (connStatus === 'Overheating') {
+            statusBadge.classList.add('bg-error-container', 'text-error');
+            statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-error mr-1.5 animate-pulse"></span><span id="status_text">Superaquecimento</span>';
+          } else if (connStatus === 'SPIFFS_Warning') {
+            statusBadge.classList.add('bg-tertiary-container', 'text-tertiary');
+            statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-tertiary mr-1.5 animate-pulse"></span><span id="status_text">SPIFFS Crítico</span>';
+          } else {
+            statusBadge.classList.add('bg-red-100', 'text-red-700');
+            statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 animate-pulse"></span><span id="status_text">Offline</span>';
+          }
+        }
+        
+        if (lastUpdate) {
+          lastUpdate.textContent = `Última atualização: ${latestReading.time}`;
+        }
+        
+        // Create trend grid for all devices
+        const gridContainer = document.getElementById('dynamic-chambers-grid');
+        if (gridContainer) {
+            let gridHtml = '';
+            
+            for (let deviceId of uniqueDevices) {
+                const readings = filterByChamber(dataArray, deviceId);
+                const latest = readings[readings.length - 1] as SensorReading;
+                
+                // Get configured name and limits
+                const devConfig = storedCameras[deviceId];
+                const devName = devConfig?.name || latest.name || deviceId;
+                const limits = getDeviceLimits(deviceId);
+                
+                const isSafe = latest.connection === 'Connected' && latest.temp <= limits.max && latest.temp >= limits.min;
+                const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+                const badgeText = latest.connection === 'Disconnected' ? 'Offline' : (isSafe ? 'Seguro' : 'Aviso');
+                const progressHue = isSafe ? 'bg-primary' : 'bg-secondary-container';
+                
+                gridHtml += `
+                <div class="glass-card p-6 rounded-lg ring-1 ring-white/30 flex flex-col justify-between min-h-[160px] cursor-pointer hover:shadow-md transition-shadow max-w-sm text-center mx-auto" onclick="window.location.href='detalhes_camara.html?id=${latest.device_id}'">
+                    <div class="w-full">
+                        <div class="flex justify-between items-start mb-3 w-full">
+                            <p class="text-xs font-label text-on-surface-variant opacity-80 uppercase tracking-[0.15em] font-bold">${devName}</p>
+                            <span class="px-2.5 py-1 rounded-full ${badgeClass} text-[10px] font-bold uppercase tracking-wider">${badgeText}</span>
+                        </div>
+                        <p class="text-4xl font-headline font-bold text-on-surface">${Math.round(latest.temp)}°C</p>
+                        <p class="text-[10px] text-slate-500 mt-1">Limites: ${limits.min}°C a ${limits.max}°C</p>
+                    </div>
+                    <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mt-4">
+                        <div class="h-full ${progressHue} w-[85%]"></div>
+                    </div>
+                </div>`;
+            }
+            
+            gridContainer.innerHTML = gridHtml + `
+                <div class="col-span-2 bg-white/60 backdrop-blur-md p-5 rounded-xl flex items-center justify-between px-8 ring-1 ring-black/5 mt-2 cursor-pointer" onclick="window.location.href='historico_alertas.html'">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-amber-600">notification_important</span>
+                        <span class="text-sm font-medium text-on-surface">Monitorando Time-Series: ${dataArray.length} entradas</span>
+                    </div>
+                    <span class="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+                </div>
+            `;
+        }
+      })
+      .catch(error => console.error('Error fetching data:', error));
   }
 
   // Phase 4 & 5: Dynamic Details Page Logic
@@ -262,67 +397,255 @@ document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     const deviceId = urlParams.get('id');
 
-    const renderChamberDetails = (dataArray: SensorReading[]) => {
-      if (!dataArray || dataArray.length === 0 || !deviceId) return;
-      const readings: SensorReading[] = filterByChamber(dataArray, deviceId);
-      if (readings.length === 0) return;
-      
-      // Check real-time data first
-      const realtimeLatest = getLatestReading(deviceId);
-      const latest = realtimeLatest || readings[readings.length - 1];
-      
-      const tempHeader = document.querySelector('h1.text-\\[5\\.5rem\\]');
-      if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
-      
-      const temps = readings.map((r: SensorReading) => r.temp);
-      const minT = Math.min(...temps) - 2;
-      const maxT = Math.max(...temps) + 2;
-      const range = maxT - minT || 1;
-      const svgWidth = 400;
-      const svgHeight = 100;
-      
-      const points = readings.map((r: SensorReading, idx: number) => {
-         const x = (idx / (readings.length - 1)) * svgWidth;
-         const y = svgHeight - ((r.temp - minT) / range) * svgHeight;
-         return {x, y};
-      });
-      
-      let pathD = `M ${points[0].x} ${points[0].y} `;
-      for(let i = 1; i < points.length; i++) pathD += `L ${points[i].x} ${points[i].y} `;
-      let fillD = pathD + `L ${svgWidth} ${svgHeight} L 0 ${svgHeight} Z`;
-      
-      const paths = document.querySelectorAll('svg path');
-      if (paths && paths.length >= 2) {
-         paths[0].setAttribute('d', pathD);
-         paths[1].setAttribute('d', fillD);
-      }
-      
-      const logsContainer = document.querySelector('.space-y-3');
-      if (logsContainer) {
-          logsContainer.innerHTML = '';
-          [...readings].reverse().forEach((r: SensorReading) => {
-              const safeStr = (r.temp < -15 && r.connection === 'Connected');
-              const color = safeStr ? 'bg-primary' : 'bg-secondary';
-              const title = r.connection === 'Disconnected' ? 'Equipamento Offline' : (safeStr ? 'Leitura Estável' : 'Alerta de Temperatura');
-              const logHtml = `<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
-                    <div class="flex items-center gap-4">
-                        <div class="w-2 h-2 rounded-full ${color}"></div>
-                        <div>
-                            <p class="font-semibold text-on-surface">${title} (${r.temp}°C)</p>
-                            <span class="text-[12px] text-on-surface-variant">${r.date}, ${r.time}</span>
-                        </div>
-                    </div>
-                </div>`;
-                logsContainer.insertAdjacentHTML('beforeend', logHtml);
-          });
-      }
-    };
-
     if (deviceId) {
-      getReadings().then(renderChamberDetails);
-      
-      // Listen for real-time updates on details page
-      onRealtimeUpdate(renderChamberDetails);
+      getReadings().then((dataArray: SensorReading[]) => {
+          if (!dataArray || dataArray.length === 0) return;
+          let readings: SensorReading[] = filterByChamber(dataArray, deviceId);
+          
+          // Filter out invalid readings
+          readings = readings.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
+          
+          if (readings.length === 0) return;
+          const latest: SensorReading = readings[readings.length - 1];
+          const tempHeader = document.querySelector('h1.text-\\[5\\.5rem\\]');
+          if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
+          
+          // Get device-specific limits
+          const limits = getDeviceLimits(deviceId);
+          const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
+          const devConfig = storedCameras[deviceId];
+          
+          // Update chart with device limits
+          const temps = readings.map((r: SensorReading) => r.temp);
+          const limitBuffer = Math.abs(limits.max - limits.min) * 0.2;
+          const minT = Math.min(limits.min - limitBuffer, Math.min(...temps) - 1);
+          const maxT = Math.max(limits.max + limitBuffer, Math.max(...temps) + 1);
+          const range = maxT - minT || 1;
+          const svgWidth = 400;
+          const svgHeight = 100;
+          
+          // Padding interno do gráfico
+          const padding = { left: 0, right: 0, top: 10, bottom: 10 };
+          const chartInnerWidth = svgWidth - padding.left - padding.right;
+          const chartInnerHeight = svgHeight - padding.top - padding.bottom;
+          
+          const points = readings.map((r: SensorReading, idx: number) => {
+             const x = padding.left + (idx / (readings.length - 1 || 1)) * chartInnerWidth;
+             const y = padding.top + chartInnerHeight - ((r.temp - minT) / range) * chartInnerHeight;
+             return {x, y, temp: r.temp};
+           });
+          
+          let pathD = '';
+          if (points.length > 0 && !isNaN(points[0].y)) {
+              pathD = `M ${points[0].x} ${points[0].y} `;
+              for(let i = 1; i < points.length; i++) {
+                  if (!isNaN(points[i].y)) {
+                      pathD += `L ${points[i].x} ${points[i].y} `;
+                  }
+              }
+          }
+          // Area fill within chart bounds
+          const fillD = pathD + `L ${svgWidth - padding.right} ${svgHeight - padding.bottom} L ${padding.left} ${svgHeight - padding.bottom} Z`;
+          
+          // Update chart paths
+          const chartLine = document.getElementById('details-chart-line');
+          const chartArea = document.getElementById('details-chart-area');
+          if (chartLine) chartLine.setAttribute('d', pathD);
+          if (chartArea) chartArea.setAttribute('d', fillD);
+          
+          // Update Y-axis labels
+          const yAxisLabels = document.getElementById('details-y-axis');
+          if (yAxisLabels) {
+              yAxisLabels.innerHTML = `
+                  <span>${maxT.toFixed(0)}°</span>
+                  <span>${((maxT + minT) / 2).toFixed(0)}°</span>
+                  <span>${minT.toFixed(0)}°</span>
+              `;
+          }
+          
+          // Add peak and valley indicators
+          const maxReadingTemp = Math.max(...temps);
+          const minReadingTemp = Math.min(...temps);
+          const peakIdx = points.findIndex(p => p.temp === maxReadingTemp);
+          const valleyIdx = points.findIndex(p => p.temp === minReadingTemp);
+          
+          const detailsPeakIndicator = document.getElementById('details-peak-indicator');
+          if (detailsPeakIndicator && peakIdx !== -1) {
+            detailsPeakIndicator.setAttribute('transform', `translate(${points[peakIdx].x}, ${points[peakIdx].y})`);
+            detailsPeakIndicator.classList.remove('opacity-0');
+          }
+          
+          const detailsValleyIndicator = document.getElementById('details-valley-indicator');
+          if (detailsValleyIndicator && valleyIdx !== -1 && valleyIdx !== peakIdx) {
+            detailsValleyIndicator.setAttribute('transform', `translate(${points[valleyIdx].x}, ${points[valleyIdx].y})`);
+            detailsValleyIndicator.classList.remove('opacity-0');
+          }
+          
+          // Populate alerts based on device limits
+          const alertsContainer = document.getElementById('chamber-alerts');
+          if (alertsContainer) {
+              alertsContainer.innerHTML = '';
+              
+              // Filter readings that are out of limits or offline
+              const alerts = readings.filter(r => {
+                  const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
+                  return isOutOfRange || r.connection === 'Disconnected';
+              }).reverse();
+              
+              if (alerts.length === 0) {
+                  alertsContainer.innerHTML = `
+                      <div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg">
+                          <div class="flex items-center gap-4">
+                              <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                              <div>
+                                  <p class="font-semibold text-on-surface">Nenhum alerta - Temperatura dentro dos limites</p>
+                                  <span class="text-[12px] text-on-surface-variant">Limites: ${limits.min}°C a ${limits.max}°C</span>
+                              </div>
+                          </div>
+                      </div>`;
+              } else {
+                  alerts.forEach((r: SensorReading) => {
+                      const isOffline = r.connection === 'Disconnected';
+                      const isAbove = r.temp > limits.max;
+                      const isBelow = r.temp < limits.min;
+                      
+                      let title, color;
+                      if (isOffline) {
+                          title = 'Equipamento Offline';
+                          color = 'bg-amber-500';
+                      } else if (isAbove) {
+                          title = `Temperatura acima do limite (max: ${limits.max}°C)`;
+                          color = 'bg-red-500';
+                      } else if (isBelow) {
+                          title = `Temperatura abaixo do limite (min: ${limits.min}°C)`;
+                          color = 'bg-red-500';
+                      } else {
+                          title = 'Alerta de Temperatura';
+                          color = 'bg-secondary';
+                      }
+                      
+                      const alertHtml = `<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
+                              <div class="flex items-center gap-4">
+                                  <div class="w-2 h-2 rounded-full ${color}"></div>
+                                  <div>
+                                      <p class="font-semibold text-on-surface">${title}</p>
+                                      <span class="text-[12px] text-on-surface-variant">${r.temp.toFixed(1)}°C - ${r.date}, ${r.time}</span>
+                                  </div>
+                              </div>
+                          </div>`;
+                      alertsContainer.insertAdjacentHTML('beforeend', alertHtml);
+                  });
+              }
+          }
+          
+          // Add interactive tooltip to details chart (like analise page)
+          const chartSvg = document.getElementById('details-chart-svg');
+          const detailsSvgWidth = 400;
+          const detailsSvgHeight = 100;
+          const detailsPadding = { left: 0, right: 0, top: 10, bottom: 10 };
+          
+          if (chartSvg && readings.length > 0) {
+            // Clear old circles
+            const oldCircles = chartSvg.querySelectorAll('.details-chart-point');
+            oldCircles.forEach(c => c.remove());
+            
+            const chartRange = maxT - minT;
+            const detailsMapY = (temp: number) => detailsPadding.top + (detailsSvgHeight - detailsPadding.top - detailsPadding.bottom) - ((temp - minT) / chartRange) * (detailsSvgHeight - detailsPadding.top - detailsPadding.bottom);
+            const detailsMapX = (idx: number) => detailsPadding.left + (idx / (readings.length - 1 || 1)) * (detailsSvgWidth - detailsPadding.left - detailsPadding.right);
+            
+            // Add circles for each reading
+            readings.forEach((r: SensorReading, idx: number) => {
+              if (r.temp === undefined || r.temp === null || isNaN(r.temp)) return;
+              
+              const limits = getDeviceLimits(deviceId);
+              const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
+              const status = r.connection === 'Disconnected' ? 'Offline' : (isOutOfRange ? 'Alerta' : 'Normal');
+              const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutOfRange ? '#dc2626' : '#16a34a');
+              
+              const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              circle.setAttribute('class', 'details-chart-point cursor-pointer');
+              circle.setAttribute('cx', detailsMapX(idx).toString());
+              circle.setAttribute('cy', detailsMapY(r.temp).toString());
+              circle.setAttribute('r', '4');
+              circle.setAttribute('fill', statusColor);
+              circle.setAttribute('data-temp', r.temp.toString());
+              circle.setAttribute('data-time', r.time || '');
+              circle.setAttribute('data-date', r.date || '');
+              circle.setAttribute('data-status', status);
+              circle.setAttribute('data-limits', `${limits.min}°C - ${limits.max}°C`);
+              circle.setAttribute('data-device', devConfig?.name || r.name || deviceId);
+              
+              chartSvg.appendChild(circle);
+            });
+            
+            // Add tooltip element
+            let tooltip = document.getElementById('details-chart-tooltip');
+            if (!tooltip) {
+              tooltip = document.createElement('div');
+              tooltip.id = 'details-chart-tooltip';
+              tooltip.className = 'fixed hidden bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl z-50 pointer-events-none max-w-xs';
+              document.body.appendChild(tooltip);
+            }
+            
+            // Add event listeners
+            const circles = chartSvg.querySelectorAll('.details-chart-point');
+            circles.forEach((circle) => {
+              circle.addEventListener('mouseenter', (e) => {
+                const target = e.target as SVGElement;
+                tooltip!.innerHTML = `
+                  <div class="font-bold text-sm">${target.dataset.device}</div>
+                  <div class="text-lg font-bold mt-1">${target.dataset.temp}°C</div>
+                  <div class="text-slate-300 mt-1">${target.dataset.date} ${target.dataset.time}</div>
+                  <div class="mt-2 pt-2 border-t border-slate-600">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-full" style="background: ${target.dataset.status === 'Normal' ? '#16a34a' : target.dataset.status === 'Offline' ? '#d97706' : '#dc2626'}"></span>
+                      <span>${target.dataset.status}</span>
+                    </div>
+                    <div class="text-slate-400 mt-1">Limites: ${target.dataset.limits}</div>
+                  </div>`;
+                tooltip!.classList.remove('hidden');
+                target.setAttribute('r', '6');
+              });
+              
+              circle.addEventListener('mousemove', (e) => {
+                tooltip!.style.left = `${e.clientX + 15}px`;
+                tooltip!.style.top = `${e.clientY - 10}px`;
+              });
+              
+              circle.addEventListener('mouseleave', (e) => {
+                const target = e.target as SVGElement;
+                tooltip!.classList.add('hidden');
+                target.setAttribute('r', '4');
+              });
+            });
+            
+            // Generate dynamic X Axis for details chart
+            const detailsXAxis = document.getElementById('details-x-axis');
+            if (detailsXAxis && readings.length > 0) {
+                const numLabels = Math.min(5, Math.max(2, Math.ceil(readings.length / 8)));
+                const step = Math.max(1, Math.floor((readings.length - 1) / (numLabels - 1)));
+                let labels = '';
+                const now = new Date();
+                
+                for (let i = 0; i < numLabels; i++) {
+                    const idx = Math.min(i * step, readings.length - 1);
+                    if (idx >= readings.length) continue;
+                    const r = readings[idx];
+                    const readingDate = new Date(`${r.date}T${r.time}`);
+                    const hoursDiff = (now.getTime() - readingDate.getTime()) / (1000 * 60 * 60);
+                    
+                    let label;
+                    if (hoursDiff <= 24) {
+                        label = r.time.substring(0, 5);
+                    } else {
+                        label = readingDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+                    }
+                    labels += `<span>${label}</span>`;
+                }
+                detailsXAxis.innerHTML = labels;
+            }
+          }
+        });
     }
   }
 
@@ -331,13 +654,50 @@ document.addEventListener("DOMContentLoaded", () => {
       let globalData: SensorReading[] = [];
       let currentChamber = 'ALL';
       let currentDays = 1;
+       
+      // Get configured cameras
+      const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
 
       const renderAnalytics = () => {
-          if (globalData.length === 0) return;
+          console.log('[renderAnalytics] globalData length:', globalData.length);
+          if (globalData.length === 0) {
+              console.log('[renderAnalytics] No data, returning early');
+              return;
+          }
 
-          let filtered = filterByDays(globalData, currentDays);
+          try {
+
+          // Always filter to at least last 24 hours
+          const now = new Date();
+          const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          
+          // Filter data to last 24 hours minimum
+          let filtered = globalData.filter(r => {
+              const readingTime = new Date(`${r.date}T${r.time}`);
+              return readingTime >= oneDayAgo;
+          });
+          
+          // Apply chamber filter
           filtered = filterByChamber(filtered, currentChamber);
-          if (filtered.length === 0) filtered = [globalData[0]]; // fallback if empty
+          
+          // If no data in 24h, use whatever we have
+          if (filtered.length === 0) filtered = globalData.slice(-20);
+          
+          // Filter out invalid readings (no temp or invalid temp)
+          filtered = filtered.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
+          
+          // Sort by time
+          filtered.sort((a, b) => {
+              const timeA = new Date(`${a.date}T${a.time}`).getTime();
+              const timeB = new Date(`${b.date}T${b.time}`).getTime();
+              return timeA - timeB;
+          });
+
+          console.log('[renderAnalytics] filtered length after cleanup:', filtered.length);
+          
+          // Get device config for tooltip (use first device in filtered data)
+          const firstDeviceId = filtered[0]?.device_id;
+          const devConfig = firstDeviceId ? storedCameras[firstDeviceId] : null;
 
           // 1. Calculate Stats
           const { max: maxTemp, min: minTemp, avg: avgTemp } = calcStats(filtered);
@@ -349,153 +709,446 @@ document.addEventListener("DOMContentLoaded", () => {
               statBlocks[2].textContent = `${avgTemp.toFixed(1)}°C`;
           }
           
-          // Re-draft the SVG line
-          const range = maxTemp - minTemp || 1;
-          const svgWidth = 400;
-          const svgHeight = 100;
-          const points = filtered.map((r: SensorReading, idx: number) => {
-             const x = (idx / (filtered.length - 1 || 1)) * svgWidth;
-             const y = svgHeight - ((r.temp - minTemp) / range) * svgHeight;
-             return {x, y, temp: r.temp};
-          });
-          let pathD = `M ${points[0].x} ${points[0].y} `;
-          for(let i = 1; i < points.length; i++) pathD += `L ${points[i].x} ${points[i].y} `;
-          let fillD = pathD + `L ${svgWidth} ${svgHeight} L 0 ${svgHeight} Z`;
-          
-          const paths = document.querySelectorAll('svg path');
-          if (paths && paths.length >= 2) {
-             paths[0].setAttribute('d', fillD);
-             paths[1].setAttribute('d', pathD);
+          // Update current temp display
+          const currentTempEl = document.getElementById('chart-current-temp');
+          if (currentTempEl && filtered.length > 0) {
+              currentTempEl.textContent = `${filtered[filtered.length - 1].temp.toFixed(1)}°C`;
           }
-
-          // Anchor dynamic Peak Tooltip Coordinate
+          
+          // Device-specific limits from camera registration
+          const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+          
+          console.log('[Analise] Device ID:', firstDeviceId);
+          console.log('[Analise] Limits:', deviceLimits);
+          
+          // Dynamic limits based on device-specific limits
+          const limitBuffer = Math.abs(deviceLimits.max - deviceLimits.min) * 0.2;
+          const upperLimit = deviceLimits.max;
+          const lowerLimit = deviceLimits.min;
+          const chartMin = Math.min(lowerLimit - limitBuffer, minTemp - 3);
+          const chartMax = Math.max(upperLimit + limitBuffer, maxTemp + 3);
+          const chartRange = chartMax - chartMin;
+          
+          const svgWidth = 800;
+          const svgHeight = 240;
+          const padding = { left: 60, right: 20, top: 20, bottom: 30 };
+          const chartWidth = svgWidth - padding.left - padding.right;
+          const chartHeight = svgHeight - padding.top - padding.bottom;
+          
+          // Map temperature to Y coordinate
+          const mapY = (temp: number) => padding.top + chartHeight - ((temp - chartMin) / chartRange) * chartHeight;
+          const mapX = (idx: number) => padding.left + (idx / (filtered.length - 1 || 1)) * chartWidth;
+          
+          // Calculate points (filter out invalid temps)
+          const validReadings = filtered.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
+          const points = validReadings.map((r: SensorReading, idx: number) => ({
+              x: mapX(idx),
+              y: mapY(r.temp),
+              temp: r.temp,
+              time: r.time,
+              date: r.date
+          }));
+          
+          // Build path for line
+          let linePath = '';
+          if (points.length > 0) {
+              linePath = `M ${points[0].x} ${points[0].y}`;
+              for (let i = 1; i < points.length; i++) {
+                  if (!isNaN(points[i].y)) {
+                      linePath += ` L ${points[i].x} ${points[i].y}`;
+                  }
+              }
+          }
+          
+          // Build area path
+          let areaPath = linePath;
+          if (points.length > 0) {
+              areaPath += ` L ${points[points.length - 1].x} ${svgHeight - padding.bottom} L ${points[0].x} ${svgHeight - padding.bottom} Z`;
+          }
+          
+          // Update SVG elements
+          const chartLine = document.getElementById('chart-line');
+          const chartArea = document.getElementById('chart-area');
+          const currentPoint = document.getElementById('current-point');
+          const safeZone = document.getElementById('safe-zone');
+          const limitMaxLine = document.getElementById('limit-max-line');
+          const limitMinLine = document.getElementById('limit-min-line');
+          
+          if (chartLine) chartLine.setAttribute('d', linePath);
+          if (chartArea) chartArea.setAttribute('d', areaPath);
+          
+          // Current point (latest reading)
+          if (currentPoint && points.length > 0) {
+              const latestPt = points[points.length - 1];
+              currentPoint.setAttribute('transform', `translate(${latestPt.x}, ${latestPt.y})`);
+              currentPoint.classList.remove('opacity-0');
+          }
+          
+          // Safe zone (between limits)
+          if (safeZone) {
+              const zoneY = mapY(upperLimit);
+              const zoneHeight = mapY(lowerLimit) - zoneY;
+              safeZone.setAttribute('x', padding.left.toString());
+              safeZone.setAttribute('y', zoneY.toString());
+              safeZone.setAttribute('width', chartWidth.toString());
+              safeZone.setAttribute('height', Math.max(0, zoneHeight).toString());
+          }
+          
+          // Limit lines
+          if (limitMaxLine) {
+              limitMaxLine.setAttribute('x1', padding.left.toString());
+              limitMaxLine.setAttribute('y1', mapY(upperLimit).toString());
+              limitMaxLine.setAttribute('x2', (svgWidth - padding.right).toString());
+              limitMaxLine.setAttribute('y2', mapY(upperLimit).toString());
+          }
+          if (limitMinLine) {
+              limitMinLine.setAttribute('x1', padding.left.toString());
+              limitMinLine.setAttribute('y1', mapY(lowerLimit).toString());
+              limitMinLine.setAttribute('x2', (svgWidth - padding.right).toString());
+              limitMinLine.setAttribute('y2', mapY(lowerLimit).toString());
+          }
+          
+          // Update Y-axis labels
+          const yMaxEl = document.getElementById('y-max');
+          const yMidEl = document.getElementById('y-mid');
+          const yMinEl = document.getElementById('y-min');
+          if (yMaxEl) yMaxEl.textContent = `${chartMax.toFixed(1)}°C`;
+          if (yMidEl) yMidEl.textContent = `${((chartMax + chartMin) / 2).toFixed(1)}°C`;
+          if (yMinEl) yMinEl.textContent = `${chartMin.toFixed(1)}°C`;
+          
+          // Draw grid lines
+          const gridLines = document.getElementById('grid-lines');
+          if (gridLines) {
+              gridLines.innerHTML = '';
+              const gridCount = 5;
+              for (let i = 0; i <= gridCount; i++) {
+                  const y = padding.top + (i / gridCount) * chartHeight;
+                  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                  line.setAttribute('x1', padding.left.toString());
+                  line.setAttribute('y1', y.toString());
+                  line.setAttribute('x2', (svgWidth - padding.right).toString());
+                  line.setAttribute('y2', y.toString());
+                  line.setAttribute('stroke', '#006399');
+                  line.setAttribute('stroke-width', '1');
+                  line.setAttribute('opacity', '0.15');
+                  gridLines.appendChild(line);
+              }
+          }
+          
+          // Create interactive tooltip points - add as SVG circles inside the chart
+          const chartSvg = document.getElementById('main-chart');
+          
+          // Remove old tooltip elements and tooltip div
+          const oldCircles = chartSvg?.querySelectorAll('.chart-point-circle');
+          oldCircles?.forEach(c => c.remove());
+          const oldTooltip = document.getElementById('chart-tooltip');
+          if (oldTooltip) oldTooltip.remove();
+          
+          if (chartSvg && filtered.length > 0) {
+            filtered.forEach((r: SensorReading, idx: number) => {
+                if (r.temp === undefined || r.temp === null || isNaN(r.temp)) return;
+                
+                const limits = getDeviceLimits(r.device_id);
+                const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
+                const status = r.connection === 'Disconnected' ? 'Offline' : (isOutOfRange ? 'Alerta' : 'Normal');
+                const statusColor = r.connection === 'Disconnected' ? '#d97706' : (isOutOfRange ? '#dc2626' : '#16a34a');
+                const rDeviceConfig = storedCameras[r.device_id];
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('class', 'chart-point-circle cursor-pointer hover:fill-primary transition-all');
+                circle.setAttribute('cx', mapX(idx).toString());
+                circle.setAttribute('cy', mapY(r.temp).toString());
+                circle.setAttribute('r', '4');
+                circle.setAttribute('fill', statusColor);
+                circle.setAttribute('opacity', '0.8');
+                circle.setAttribute('data-temp', r.temp.toString());
+                circle.setAttribute('data-time', r.time || '');
+                circle.setAttribute('data-date', r.date || '');
+                circle.setAttribute('data-status', status);
+                circle.setAttribute('data-status-color', statusColor);
+                circle.setAttribute('data-device', rDeviceConfig?.name || r.name || r.device_id);
+                circle.setAttribute('data-limits', `${limits.min}°C - ${limits.max}°C`);
+                circle.setAttribute('data-rssi', String(r.wifi_rssi || 0));
+                circle.setAttribute('data-ip', r.device_ip || '');
+                
+                chartSvg.appendChild(circle);
+            });
+            
+            // Add tooltip element
+            const tooltip = document.createElement('div');
+            tooltip.id = 'chart-tooltip';
+            tooltip.className = 'fixed hidden bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl z-50 pointer-events-none max-w-xs';
+            tooltip.innerHTML = '';
+            document.body.appendChild(tooltip);
+            
+            // Add event listeners to circles
+            const circles = chartSvg.querySelectorAll('.chart-point-circle');
+            circles.forEach((circle) => {
+                circle.addEventListener('mouseenter', (e) => {
+                    const target = e.target as SVGElement;
+                    const temp = target.dataset.temp;
+                    const time = target.dataset.time;
+                    const date = target.dataset.date;
+                    const status = target.dataset.status;
+                    const statusColor = target.dataset.statusColor;
+                    const device = target.dataset.device;
+                    const limits = target.dataset.limits;
+                    const rssi = target.dataset.rssi;
+                    const ip = target.dataset.ip;
+                    
+                    tooltip.innerHTML = `
+                        <div class="font-bold text-sm">${device}</div>
+                        <div class="text-lg font-bold mt-1">${temp}°C</div>
+                        <div class="text-slate-300 mt-1">${date} ${time}</div>
+                        <div class="mt-2 pt-2 border-t border-slate-600">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full" style="background: ${statusColor}"></span>
+                                <span>${status}</span>
+                            </div>
+                            <div class="text-slate-400 mt-1">Limites: ${limits}</div>
+                            <div class="text-slate-400">RSSI: ${rssi} dBm</div>
+                            <div class="text-slate-400">IP: ${ip}</div>
+                        </div>`;
+                    
+                    tooltip.classList.remove('hidden');
+                    target.setAttribute('r', '6');
+                });
+                
+                circle.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = `${e.clientX + 15}px`;
+                    tooltip.style.top = `${e.clientY - 10}px`;
+                });
+                
+                circle.addEventListener('mouseleave', (e) => {
+                    const target = e.target as SVGElement;
+                    tooltip.classList.add('hidden');
+                    target.setAttribute('r', '4');
+                });
+            });
+          }
+           
+          // Peak indicator (maximum)
           const peakIdx = points.findIndex(p => p.temp === maxTemp);
-          const peakPt = points[peakIdx !== -1 ? peakIdx : 0];
-          
-          const pCircle = document.getElementById('chart-peak-circle');
-          const pText = document.getElementById('chart-peak-text');
-          
-          if (pCircle) {
-             pCircle.setAttribute('cx', peakPt.x.toFixed(1));
-             pCircle.setAttribute('cy', peakPt.y.toFixed(1));
+          const peakIndicator = document.getElementById('peak-indicator');
+          if (peakIndicator && peakIdx !== -1) {
+              const peakPt = points[peakIdx];
+              peakIndicator.setAttribute('transform', `translate(${peakPt.x}, ${peakPt.y})`);
+              peakIndicator.classList.remove('opacity-0');
           }
-          if (pText) {
-             // Avoid clipping on SVG edges
-             let textX = peakPt.x;
-             if (textX < 20) textX = 20;
-             if (textX > svgWidth - 20) textX = svgWidth - 20;
-
-             pText.setAttribute('x', textX.toFixed(1));
-             pText.setAttribute('y', (peakPt.y - 10).toFixed(1));
-             pText.textContent = `PICO ${maxTemp.toFixed(1)}°C`;
+          
+          // Valley indicator (minimum)
+          const valleyIdx = points.findIndex(p => p.temp === minTemp);
+          const valleyIndicator = document.getElementById('valley-indicator');
+          if (valleyIndicator && valleyIdx !== -1 && valleyIdx !== peakIdx) {
+              const valleyPt = points[valleyIdx];
+              valleyIndicator.setAttribute('transform', `translate(${valleyPt.x}, ${valleyPt.y})`);
+              valleyIndicator.classList.remove('opacity-0');
           }
-
-          // Generate dynamic X Axis
+           
+          // Generate dynamic X Axis with better distribution
           const xAxisEl = document.getElementById('chart-x-axis');
-          if (xAxisEl) {
-             if (currentDays === 1) {
-                 xAxisEl.innerHTML = `<span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:59</span>`;
-             } else {
-                 let labels = '';
-                 for(let i=0; i<5; i++){
-                    const dt = new Date();
-                    dt.setDate(dt.getDate() - currentDays + 1 + Math.floor((currentDays-1) * (i / 4)));
-                    labels += `<span>${dt.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>`;
-                 }
-                 xAxisEl.innerHTML = labels;
-             }
+          if (xAxisEl && filtered.length > 0) {
+              // Calculate number of labels based on data volume (aim for 5-6 labels)
+              const numLabels = Math.min(6, Math.max(3, Math.ceil(filtered.length / 10)));
+              const step = Math.max(1, Math.floor((filtered.length - 1) / (numLabels - 1)));
+              let labels = '';
+              
+              for (let i = 0; i < numLabels; i++) {
+                  const idx = Math.min(i * step, filtered.length - 1);
+                  if (idx >= filtered.length) continue;
+                  const r = filtered[idx];
+                  const readingDate = new Date(`${r.date}T${r.time}`);
+                  const now = new Date();
+                  const hoursDiff = (now.getTime() - readingDate.getTime()) / (1000 * 60 * 60);
+                  
+                  let label;
+                  if (hoursDiff <= 24) {
+                      // Within 24 hours - show time
+                      label = r.time.substring(0, 5);
+                  } else {
+                      // More than 24 hours - show date
+                      label = readingDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+                  }
+                  labels += `<span class="px-1">${label}</span>`;
+              }
+              xAxisEl.innerHTML = labels;
           }
 
-          // Populate Alert Logs
-          const logContainer = document.querySelector('.space-y-4');
+          // Populate Alert Logs with configured names
+          const logContainer = document.getElementById('alert-logs-container');
           if (logContainer) {
               logContainer.innerHTML = '';
               [...filtered].reverse().forEach((r: SensorReading) => {
-                  const isAlert = r.temp >= -15 || r.connection === 'Disconnected';
+                  const limits = getDeviceLimits(r.device_id);
+                  const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
+                  const isAlert = isOutOfRange || r.connection === 'Disconnected';
                   if (!isAlert) return;
+                  
+                  // Get configured name
+                  const devConfig = storedCameras[r.device_id];
+                  const displayName = devConfig?.name || r.name || r.device_id;
                   
                   const icon = r.connection === 'Disconnected' ? 'warning' : 'notifications_active';
                   const colorGrp = r.connection === 'Disconnected' ? 'bg-tertiary-container/30 text-tertiary' : 'bg-secondary-container/20 text-secondary';
-                  const title = r.connection === 'Disconnected' ? 'Offline' : 'Alerta de Temperatura';
+                  
+                  let title;
+                  if (r.connection === 'Disconnected') {
+                      title = 'Offline';
+                  } else if (r.temp > limits.max) {
+                      title = `Acima do limite (max: ${limits.max}°C)`;
+                  } else if (r.temp < limits.min) {
+                      title = `Abaixo do limite (min: ${limits.min}°C)`;
+                  } else {
+                      title = 'Alerta de Temperatura';
+                  }
+                  
                   const html = `
-                  <div class="flex items-center gap-6 p-4 rounded-xl bg-surface-container-low/50 transition-colors">
-                      <div class="w-12 h-12 rounded-full ${colorGrp} flex items-center justify-center flex-shrink-0">
-                          <span class="material-symbols-outlined text-[24px]">${icon}</span>
+                  <div class="flex items-start gap-4 p-4 rounded-xl bg-surface-container-low/50 transition-colors">
+                      <div class="w-10 h-10 rounded-full ${colorGrp} flex items-center justify-center flex-shrink-0 mt-1">
+                          <span class="material-symbols-outlined text-[20px]">${icon}</span>
                       </div>
-                      <div class="flex-grow grid grid-cols-2 lg:grid-cols-4 items-center gap-4">
-                          <div>
-                              <span class="block text-[10px] font-bold text-on-surface-variant uppercase mb-0.5">Timestamp</span>
-                              <span class="font-bold text-on-background line-break">${r.date}, ${r.time}</span>
+                      <div class="flex-grow">
+                          <div class="flex justify-between items-start mb-1">
+                              <span class="font-bold text-on-background">${title}</span>
+                              <span class="text-[10px] text-on-surface-variant">${r.date}, ${r.time}</span>
                           </div>
-                          <div>
-                              <span class="block text-[10px] font-bold text-on-surface-variant uppercase mb-0.5">Evento</span>
-                              <span class="font-bold border-b border-black/10">${title}</span>
-                          </div>
-                          <div>
-                              <span class="block text-[10px] font-bold text-on-surface-variant uppercase mb-0.5">Câmara</span>
-                              <span class="font-bold">${r.name} (${r.temp}°C)</span>
-                          </div>
+                          <div class="text-sm text-on-surface-variant">${displayName}</div>
+                          <div class="mt-1 font-bold ${isOutOfRange ? 'text-tertiary' : 'text-secondary'}">${r.temp.toFixed(1)}°C</div>
                       </div>
                   </div>`;
                   logContainer.insertAdjacentHTML('beforeend', html);
               });
           }
+          
+          // Generate Dynamic Insights
+          const insightsContainer = document.getElementById('analytics-insights');
+          if (insightsContainer) {
+              const uniqueDevices = getUniqueDevices(filtered);
+              const activeCount = uniqueDevices.filter(id => {
+                  const latest = filtered.find(r => r.device_id === id);
+                  return latest?.connection === 'Connected';
+              }).length;
+              
+              const safeCount = filtered.filter(d => {
+                const limits = getDeviceLimits(d.device_id);
+                return d.temp >= limits.min && d.temp <= limits.max && d.connection === 'Connected';
+              }).length;
+              const compliance = filtered.length > 0 ? (safeCount / filtered.length * 100) : 0;
+              
+              const temps = filtered.map(d => d.temp);
+              const stdDev = temps.length > 1 ? Math.sqrt(temps.reduce((sum, t) => sum + Math.pow(t - avgTemp, 2), 0) / temps.length) : 0;
+              
+              const insights: string[] = [];
+              
+              // Compliance insight
+              if (compliance >= 95) {
+                  insights.push('✓ Conformidade excelente - Sistema operando dentro dos parâmetros seguros.');
+              } else if (compliance >= 80) {
+                  insights.push('⚠ Conformidade moderada - Recomenda-se revisão dos limites.');
+              } else {
+                  insights.push('✗ Baixa conformidade - Ação imediata requerida.');
+              }
+              
+              // Stability insight
+              if (stdDev < 2) {
+                  insights.push('✓ Estabilidade térmica excelente - Baixa variabilidade detected.');
+              } else if (stdDev < 5) {
+                  insights.push('⚠ Variabilidade moderada - Monitorar ciclos de operação.');
+              } else {
+                  insights.push('✗ Alta variabilidade - Investigar sistema de controle.');
+              }
+              
+              // Device status
+              if (activeCount === uniqueDevices.length) {
+                  insights.push('✓ Todos os dispositivos operacionais.');
+              } else {
+                  insights.push(`⚠ ${uniqueDevices.length - activeCount} dispositivo(s) offline.`);
+              }
+              
+              // Temperature alerts based on device limits
+              const firstDeviceId = filtered[0]?.device_id;
+              const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+              
+              if (maxTemp > deviceLimits.max) {
+                  insights.push(`⚠ Temperatura máxima acima do limite seguro (${deviceLimits.max}°C).`);
+              }
+              if (minTemp < deviceLimits.min) {
+                  insights.push(`⚠ Temperatura mínima abaixo do limite seguro (${deviceLimits.min}°C).`);
+              }
+              
+              // Real-time update indicator
+              const lastReading = filtered[filtered.length - 1];
+              if (lastReading) {
+                  insights.push(`📡 Última leitura: ${lastReading.temp.toFixed(1)}°C às ${lastReading.time}`);
+              }
+              
+              insightsContainer.innerHTML = insights.map(insight => {
+                  let colorClass = 'text-on-surface';
+                  if ( insight.startsWith('✓')) colorClass = 'text-emerald-600';
+                  else if ( insight.startsWith('⚠')) colorClass = 'text-amber-600';
+                  else if ( insight.startsWith('✗')) colorClass = 'text-red-600';
+                  else if ( insight.startsWith('📡')) colorClass = 'text-primary';
+                  
+                  return `<div class="flex items-start gap-2 ${colorClass}">
+                      <span class="font-bold">${insight}</span>
+                  </div>`;
+              }).join('');
+          }
+          
+          console.log('[renderAnalytics] Completed successfully');
+          } catch (err) {
+              console.error('[renderAnalytics] Error:', err);
+          }
       };
 
-      const loadAnalysisData = async () => {
-        const dataArray = await getReadings();
-        if (!dataArray || dataArray.length === 0) return;
-        globalData = dataArray;
-        
-        // Populate Dropdown
-        const selectEl = document.getElementById('chamber-select') as HTMLSelectElement;
-        if (selectEl) {
-            const uniqueChambers = getUniqueDevices(globalData);
-            uniqueChambers.forEach(id => {
-                const cInfo = globalData.find((d: SensorReading) => d.device_id === id);
-                const opt = document.createElement('option');
-                opt.value = id;
-                opt.textContent = cInfo?.name ?? id;
-                selectEl.appendChild(opt);
-            });
+      // Subscribe to real-time updates
+      onReadingsUpdate((readings) => {
+          globalData = readings;
+          renderAnalytics();
+      });
 
-            selectEl.addEventListener('change', (e) => {
-                currentChamber = (e.target as HTMLSelectElement).value;
-                renderAnalytics();
-            });
-        }
-
-        // Populate Time Filters
-        const timeBtns = document.querySelectorAll('.time-filter');
-        timeBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                timeBtns.forEach(b => {
-                    b.classList.remove('bg-primary', 'text-on-primary', 'active-time');
-                    b.classList.add('text-on-surface-variant');
+      getReadings().then(dataArray => {
+            if (!dataArray || dataArray.length === 0) return;
+            globalData = dataArray;
+            
+            // Populate Dropdown with configured names
+            const selectEl = document.getElementById('chamber-select') as HTMLSelectElement;
+            if (selectEl) {
+                const uniqueChambers = getUniqueDevices(globalData);
+                uniqueChambers.forEach(id => {
+                    const cInfo = globalData.find((d: SensorReading) => d.device_id === id);
+                    const devConfig = storedCameras[id];
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = devConfig?.name || cInfo?.name || id;
+                    selectEl.appendChild(opt);
                 });
-                const target = e.currentTarget as HTMLElement;
-                target.classList.remove('text-on-surface-variant');
-                target.classList.add('bg-primary', 'text-on-primary', 'active-time');
-                currentDays = parseInt(target.getAttribute('data-days') || '1');
-                renderAnalytics();
+
+                selectEl.addEventListener('change', (e) => {
+                    currentChamber = (e.target as HTMLSelectElement).value;
+                    renderAnalytics();
+                });
+            }
+
+            // Populate Time Filters
+            const timeBtns = document.querySelectorAll('.time-filter');
+            timeBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    timeBtns.forEach(b => {
+                        b.classList.remove('bg-primary', 'text-on-primary', 'active-time');
+                        b.classList.add('text-on-surface-variant');
+                    });
+                    const target = e.currentTarget as HTMLElement;
+                    target.classList.remove('text-on-surface-variant');
+                    target.classList.add('bg-primary', 'text-on-primary', 'active-time');
+                    currentDays = parseInt(target.getAttribute('data-days') || '1');
+                    renderAnalytics();
+                });
             });
-        });
 
-        // Initial Render
-        renderAnalytics();
-      };
 
-      // Load data and set up real-time updates
-      loadAnalysisData();
-
-      // Listen for real-time updates on analysis page
-      onRealtimeUpdate(() => {
-        globalData = getAllReadings().sort((a, b) => {
-          const timeA = new Date(`${a.date}T${a.time}`).getTime();
-          const timeB = new Date(`${b.date}T${b.time}`).getTime();
-          return timeB - timeA;
-        });
-        renderAnalytics();
+            // Initial Render
+            renderAnalytics();
       });
   }
 
@@ -658,37 +1311,59 @@ document.addEventListener("DOMContentLoaded", () => {
             });
          }
 
-         // Generate Button Logics
-         const generateBtn = document.getElementById('btn-generate-report');
-         if (generateBtn) {
-            generateBtn.addEventListener('click', () => {
-                const incGraphs = (document.getElementById('chk-graphs') as HTMLInputElement)?.checked || false;
-                const incLogs = (document.getElementById('chk-logs') as HTMLInputElement)?.checked || false;
-                
-                // Collect selected cameras
-                const camChecks = Array.from(document.querySelectorAll('.cam-chk')) as HTMLInputElement[];
-                let selectedCams = camChecks.filter(c => c.checked).map(c => c.value);
-                if (selectedCams.length === 0) selectedCams = ['ALL']; // fallback
-                
-                // Save to history
-                saveRecentReport(selectedType, selectedFormat, selectedCams, incGraphs, incLogs);
+          // Generate Button Logics
+          let selectedPeriod = 1;
+          const periodBtns = document.querySelectorAll('.period-btn');
+          periodBtns.forEach(btn => {
+              btn.addEventListener('click', (e) => {
+                  periodBtns.forEach(b => {
+                      b.classList.remove('bg-primary', 'text-on-primary', 'active-period');
+                      b.classList.add('text-on-surface-variant');
+                  });
+                  const target = e.currentTarget as HTMLElement;
+                  target.classList.remove('text-on-surface-variant');
+                  target.classList.add('bg-primary', 'text-on-primary', 'active-period');
+                  selectedPeriod = parseInt(target.getAttribute('data-days') || '1');
+              });
+          });
+          
+          const generateBtn = document.getElementById('btn-generate-report');
+          if (generateBtn) {
+             generateBtn.addEventListener('click', () => {
+                 const incGraphs = (document.getElementById('chk-graphs') as HTMLInputElement)?.checked || false;
+                 const incLogs = (document.getElementById('chk-logs') as HTMLInputElement)?.checked || false;
+                 
+                 // Collect selected cameras
+                 const camChecks = Array.from(document.querySelectorAll('.cam-chk')) as HTMLInputElement[];
+                 let selectedCams = camChecks.filter(c => c.checked).map(c => c.value);
+                 if (selectedCams.length === 0) selectedCams = ['ALL']; // fallback
+                 
+                 // Save to history
+                 saveRecentReport(selectedType, selectedFormat, selectedCams, incGraphs, incLogs);
 
-                if (selectedFormat === 'PDF') {
-                    window.location.href = `visualizacao_relatorio.html?type=${encodeURIComponent(selectedType)}&graphs=${incGraphs}&logs=${incLogs}&cams=${selectedCams.join(',')}`;
-                    return;
-                }
+                 if (selectedFormat === 'PDF') {
+                     window.location.href = `visualizacao_relatorio.html?type=${encodeURIComponent(selectedType)}&graphs=${incGraphs}&logs=${incLogs}&cams=${selectedCams.join(',')}&days=${selectedPeriod}`;
+                     return;
+                 }
                
                let contentText = '';
-               let typeType = '';
-               let extension = '';
-               
-               // Applica Filtro de câmera antes de exportar
-               let exportData = data;
-               if (!selectedCams.includes('ALL')) {
-                   exportData = data.filter((d: any) => selectedCams.includes(d.device_id) || selectedCams.includes(d.name));
-               }
+                let typeType = '';
+                let extension = '';
+                
+                // Apply period filter before export
+                const now = new Date();
+                const cutoffDate = new Date(now.getTime() - selectedPeriod * 24 * 60 * 60 * 1000);
+                let exportData = data.filter((d: any) => {
+                    const readingDate = new Date(`${d.date}T${d.time}`);
+                    return readingDate >= cutoffDate;
+                });
+                
+                // Apply camera filter
+                if (!selectedCams.includes('ALL')) {
+                    exportData = exportData.filter((d: any) => selectedCams.includes(d.device_id) || selectedCams.includes(d.name));
+                }
 
-               if (selectedFormat === 'CSV') {
+                if (selectedFormat === 'CSV') {
                    const header = "device_id,name,temp,wifi_rssi,date,time,connection\n";
                    const rows = exportData.map((d: any) => `${d.device_id},${d.name},${d.temp},${d.wifi_rssi},${d.date},${d.time},${d.connection}`).join("\n");
                    contentText = header + rows;
@@ -744,35 +1419,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (editDeviceId) {
       isEditMode = true;
-      // Load existing device data from localStorage or from the readings
+      
+      // Load existing device data from localStorage
       const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
-      const existing = storedCameras[editDeviceId];
+      let existing = storedCameras[editDeviceId];
+      
+      // If not in localStorage, try to get from current readings
+      if (!existing) {
+        getReadings().then(readings => {
+          const reading = readings?.find((r: SensorReading) => r.device_id === editDeviceId);
+          if (reading) {
+            existing = {
+              name: reading.name || editDeviceId,
+              location: '',
+              unit_type: 'congelador',
+              temp_min: '-25',
+              temp_max: '-15',
+              ip: reading.device_ip || '',
+              device_id: reading.device_id,
+              mqtt_topic: 'gettemp'
+            };
+            
+            // Preenche os campos
+            (document.getElementById('chamber_name') as HTMLInputElement).value = existing.name;
+            (document.getElementById('location') as HTMLInputElement).value = existing.location;
+            if (existing.unit_type) (document.getElementById('unit_type') as HTMLSelectElement).value = existing.unit_type;
+            tMinSlider.value = existing.temp_min;
+            if (tMinDisplay) tMinDisplay.textContent = existing.temp_min + '°C';
+            tMaxSlider.value = existing.temp_max;
+            if (tMaxDisplay) tMaxDisplay.textContent = existing.temp_max + '°C';
+            (document.getElementById('device_ip') as HTMLInputElement).value = existing.ip;
+            (document.getElementById('device_id_input') as HTMLInputElement).value = existing.device_id;
+            (document.getElementById('mqtt_topic') as HTMLInputElement).value = existing.mqtt_topic;
+            
+            // Update page title for edit mode
+            const stepLabel = document.getElementById('step-label');
+            const stepTitle = document.querySelector('#step1 h2');
+            if (stepLabel) stepLabel.textContent = 'Modo de Edição';
+            if (stepTitle) stepTitle.textContent = 'Editar Câmara';
+            if (btnNextLabel) btnNextLabel.textContent = 'ATUALIZAR';
+          }
+        });
+      } else {
+        // Existing found in localStorage - fill the form
+        if (existing) {
+          (document.getElementById('chamber_name') as HTMLInputElement).value = existing.name || '';
+          (document.getElementById('location') as HTMLInputElement).value = existing.location || '';
+          if (existing.unit_type) (document.getElementById('unit_type') as HTMLSelectElement).value = existing.unit_type;
+          if (existing.temp_min) {
+            tMinSlider.value = existing.temp_min;
+            if (tMinDisplay) tMinDisplay.textContent = existing.temp_min + '°C';
+          }
+          if (existing.temp_max) {
+            tMaxSlider.value = existing.temp_max;
+            if (tMaxDisplay) tMaxDisplay.textContent = existing.temp_max + '°C';
+          }
+          (document.getElementById('device_ip') as HTMLInputElement).value = existing.ip || '';
+          (document.getElementById('device_id_input') as HTMLInputElement).value = existing.device_id || editDeviceId;
+          (document.getElementById('mqtt_topic') as HTMLInputElement).value = existing.mqtt_topic || '';
+        }
 
-      if (existing) {
-        (document.getElementById('chamber_name') as HTMLInputElement).value = existing.name || '';
-        (document.getElementById('location') as HTMLInputElement).value = existing.location || '';
-        if (existing.unit_type) (document.getElementById('unit_type') as HTMLSelectElement).value = existing.unit_type;
-        if (existing.temp_min) {
-          tMinSlider.value = existing.temp_min;
-          if (tMinDisplay) tMinDisplay.textContent = existing.temp_min + '°C';
-        }
-        if (existing.temp_max) {
-          tMaxSlider.value = existing.temp_max;
-          if (tMaxDisplay) tMaxDisplay.textContent = existing.temp_max + '°C';
-        }
-        (document.getElementById('device_ip') as HTMLInputElement).value = existing.ip || '';
-        (document.getElementById('device_id_input') as HTMLInputElement).value = existing.device_id || editDeviceId;
-        (document.getElementById('mqtt_topic') as HTMLInputElement).value = existing.mqtt_topic || '';
+        // Update page title for edit mode
+        const stepLabel = document.getElementById('step-label');
+        const stepTitle = document.querySelector('#step1 h2');
+        if (stepLabel) stepLabel.textContent = 'Modo de Edição';
+        if (stepTitle) stepTitle.textContent = 'Editar Câmara';
+        if (btnNextLabel) btnNextLabel.textContent = 'SALVAR';
       }
-
-      // Update page title for edit mode
-      const stepLabel = document.getElementById('step-label');
-      const stepTitle = document.querySelector('#step1 h2');
-      if (stepLabel) stepLabel.textContent = 'Modo de Edição';
-      if (stepTitle) stepTitle.textContent = 'Editar Câmara';
-
-      // Change submit button text
-      if (btnNextLabel) btnNextLabel.textContent = 'PRÓXIMO';
     }
 
     const updateView = () => {
@@ -781,13 +1494,10 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (currentStep === 1) {
         step1?.classList.remove('hidden');
-        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'PRÓXIMO' : 'PRÓXIMO';
+        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'SALVAR' : 'CONECTAR';
       } else if (currentStep === 2) {
         step2?.classList.remove('hidden');
-        if (btnNextLabel) btnNextLabel.textContent = 'REVISAR';
-      } else if (currentStep === 3) {
-        step3?.classList.remove('hidden');
-        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'ATUALIZAR CÂMARA' : 'CONFIRMAR REGISTRO';
+        if (btnNextLabel) btnNextLabel.textContent = isEditMode ? 'ATUALIZAR' : 'REGISTRAR';
         
         // Populate summary
         if (summary) {
@@ -801,15 +1511,17 @@ document.addEventListener("DOMContentLoaded", () => {
           summary.innerHTML = `
             <div class="bg-surface-container-low p-4 rounded-xl">
               <p class="text-xs text-on-surface-variant font-bold uppercase">Câmara</p>
-              <p class="font-bold text-on-surface">${name || 'Não informado'} (${loc || 'N/A'})</p>
+              <p class="font-bold text-on-surface">${name || 'Não informado'}</p>
+              <p class="text-xs text-on-surface-variant">${loc || 'Localização não definida'}</p>
             </div>
             <div class="bg-surface-container-low p-4 rounded-xl">
               <p class="text-xs text-on-surface-variant font-bold uppercase">Limites</p>
-              <p class="font-bold text-on-surface">Min: ${min}°C | Máx: ${max}°C</p>
+              <p class="font-bold text-on-surface">${min}°C a ${max}°C</p>
             </div>
             <div class="bg-surface-container-low p-4 rounded-xl">
-              <p class="text-xs text-on-surface-variant font-bold uppercase">Rede</p>
-              <p class="font-bold text-on-surface font-mono text-sm">IP: ${ip || 'N/A'} | ID: ${did || 'N/A'}</p>
+              <p class="text-xs text-on-surface-variant font-bold uppercase">Dispositivo</p>
+              <p class="font-bold text-on-surface font-mono text-sm">${did || 'A definir'}</p>
+              <p class="text-xs text-on-surface-variant">${ip || 'IP não definido'}</p>
             </div>
           `;
         }
@@ -817,29 +1529,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     btnNext?.addEventListener('click', () => {
-      if (currentStep < 3) {
-        // Validate required fields before proceeding
+      if (currentStep < 2) {
+        // Validate only name in step 1
         if (currentStep === 1) {
           const name = (document.getElementById('chamber_name') as HTMLInputElement).value.trim();
-          const location = (document.getElementById('location') as HTMLInputElement).value.trim();
           if (!name) {
             alert('Por favor, informe o nome da câmara.');
-            return;
-          }
-          if (!location) {
-            alert('Por favor, informe a localização da câmara.');
-            return;
-          }
-        }
-        if (currentStep === 2) {
-          const ip = (document.getElementById('device_ip') as HTMLInputElement).value.trim();
-          const did = (document.getElementById('device_id_input') as HTMLInputElement).value.trim();
-          if (!ip) {
-            alert('Por favor, informe o endereço IP do dispositivo.');
-            return;
-          }
-          if (!did) {
-            alert('Por favor, informe o ID do dispositivo.');
             return;
           }
         }
@@ -891,8 +1586,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isPage('historico_alertas')) {
     getReadings().then(data => {
       if (!data) return;
-      // Get only disconnected or temp > -15
-      const alerts = data.filter(r => r.temp >= -15 || r.connection === 'Disconnected').reverse();
+      
+      // Get device-specific limits and filter alerts based on them
+      const alerts = data.filter(r => {
+        const limits = getDeviceLimits(r.device_id);
+        const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
+        const isOffline = r.connection === 'Disconnected';
+        return isOutOfRange || isOffline;
+      }).reverse();
       const list = document.getElementById('alerts-list');
       const search = document.getElementById('search-input') as HTMLInputElement;
       const filters = document.querySelectorAll('button[data-filter]');
@@ -918,9 +1619,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
         filtered.forEach(r => {
           const isOffline = r.connection === 'Disconnected';
-          const icon = isOffline ? 'warning' : 'notifications_active';
-          const title = isOffline ? 'Equipamento Offline' : 'Temperatura Crítica';
-          const colorClass = isOffline ? 'bg-tertiary-container/30 text-tertiary' : 'bg-error-container/30 text-error';
+          const limits = getDeviceLimits(r.device_id);
+          const isAbove = r.temp > limits.max;
+          const isBelow = r.temp < limits.min;
+          
+          let title, icon, colorClass;
+          if (isOffline) {
+            title = 'Equipamento Offline';
+            icon = 'warning';
+            colorClass = 'bg-tertiary-container/30 text-tertiary';
+          } else if (isAbove) {
+            title = `Temperatura máxima acima do limite (${limits.max}°C)`;
+            icon = 'expand_less';
+            colorClass = 'bg-error-container/30 text-error';
+          } else if (isBelow) {
+            title = `Temperatura mínima abaixo do limite (${limits.min}°C)`;
+            icon = 'expand_more';
+            colorClass = 'bg-error-container/30 text-error';
+          } else {
+            title = 'Alerta de Temperatura';
+            icon = 'notifications_active';
+            colorClass = 'bg-error-container/30 text-error';
+          }
 
           list.innerHTML += `
             <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-surface-container-low rounded-2xl gap-4 hover:shadow-md transition-shadow ring-1 ring-black/5">
@@ -976,24 +1696,38 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Visualizacao Relatorio ---
   if (isPage('visualizacao_relatorio')) {
     const urlParams = new URLSearchParams(window.location.search);
-    const type = urlParams.get('type') || 'Relatório Completo';
+    const type = urlParams.get('type') || 'Relatório de Qualidade Térmica';
     const hasGraphs = urlParams.get('graphs') !== 'false';
     const hasLogs = urlParams.get('logs') !== 'false';
+    const periodDays = parseInt(urlParams.get('days') || '1');
 
     getReadings().then(mutData => {
       let data = [...mutData];
       if (!data || data.length === 0) return;
+      
+      // Filter by period
+      const now = new Date();
+      const cutoffDate = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+      data = data.filter(r => {
+          const readingDate = new Date(`${r.date}T${r.time}`);
+          return readingDate >= cutoffDate;
+      });
       
       const filterCamsStr = urlParams.get('cams');
       if (filterCamsStr && filterCamsStr !== 'ALL') {
           const validCams = filterCamsStr.split(',');
           data = data.filter(r => validCams.includes(r.device_id) || validCams.includes(r.name)); 
       }
+      
+      // Filter out invalid readings
+      data = data.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
+      
       if (data.length === 0) return;
+      
+      const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
       
       const elChartSec = document.getElementById('report-chart-section');
       const elLogsSec = document.getElementById('report-logs-section');
-      const elStatsGrid = document.getElementById('report-stats-grid');
       const elTableTitle = document.getElementById('report-table-title');
 
       if (!hasGraphs && elChartSec) elChartSec.classList.add('hidden');
@@ -1001,23 +1735,91 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const { max, min, avg } = calcStats(data);
       const bounds = getDateBounds(data);
+      
+      // Calculate standard deviation
+      const temps = data.map(d => d.temp);
+      const stdDev = Math.sqrt(temps.reduce((sum, t) => sum + Math.pow(t - avg, 2), 0) / temps.length);
+      
+      // Calculate compliance (within device-specific safe range)
+      // Get limits from first device in data (or default)
+      const firstDeviceId = data[0]?.device_id;
+      const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+      const safeCount = data.filter(d => d.temp >= deviceLimits.min && d.temp <= deviceLimits.max && d.connection === 'Connected').length;
+      const compliance = data.length > 0 ? (safeCount / data.length * 100).toFixed(1) : '0';
+      
+      // Get unique devices
+      const uniqueDevices = getUniqueDevices(data);
+      const activeDevices = uniqueDevices.filter(id => {
+        const latest = data.find(d => d.device_id === id);
+        return latest?.connection === 'Connected';
+      }).length;
+      
+      // Calculate coverage time
+      let coverage = '--';
+      if (bounds) {
+        const hours = (bounds.max.getTime() - bounds.min.getTime()) / (1000 * 60 * 60);
+        coverage = hours > 24 ? `${(hours / 24).toFixed(1)} dias` : `${hours.toFixed(1)} horas`;
+      }
+      
+      // Stability score (inverse of stdDev)
+      const stability = Math.max(0, 100 - stdDev * 10).toFixed(1);
 
+      // Set document signature
+      const docSignature = document.getElementById('doc-signature');
+      if (docSignature) docSignature.textContent = `GT-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+      // Update filename and title
       const elTitle = document.getElementById('report-filename');
       const elType = document.getElementById('report-type-title');
       const elDate = document.getElementById('report-date-generated');
+      const elDateRange = document.getElementById('report-date-range');
+      
+      const reportId = `RL-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      if (elTitle) elTitle.textContent = reportId;
+      if (elType) elType.textContent = type;
+      if (elDate && bounds) elDate.textContent = `Gerado em ${new Date().toLocaleDateString('pt-BR', {day: '2-digit', month: 'long', year: 'numeric'})}`;
+      if (elDateRange && bounds) elDateRange.textContent = `${bounds.min.toLocaleDateString('pt-BR')} a ${bounds.max.toLocaleDateString('pt-BR')}`;
+
+      // Update KPIs
       const elAvg = document.getElementById('report-avg-temp');
       const elMax = document.getElementById('report-max-temp');
+      const elMaxDate = document.getElementById('report-max-date');
       const elMin = document.getElementById('report-min-temp');
-      const tbl = document.getElementById('report-records-table');
-
-      if (elTitle) elTitle.textContent = `relatorio_insight_${new Date().getTime()}.pdf`;
-      if (elType) elType.textContent = type;
-      if (elDate && bounds) elDate.textContent = `Gerado p/ ${bounds.min.toLocaleDateString()} a ${bounds.max.toLocaleDateString()}`;
+      const elMinDate = document.getElementById('report-min-date');
+      const elCompliance = document.getElementById('report-compliance');
+      
       if (elAvg) elAvg.textContent = `${avg.toFixed(1)}°C`;
       if (elMax) elMax.textContent = `${max.toFixed(1)}°C`;
+      if (elMaxDate) {
+        const maxReading = data.find(d => d.temp === max);
+        elMaxDate.textContent = maxReading ? `${maxReading.date} ${maxReading.time}` : '--';
+      }
       if (elMin) elMin.textContent = `${min.toFixed(1)}°C`;
+      if (elMinDate) {
+        const minReading = data.find(d => d.temp === min);
+        elMinDate.textContent = minReading ? `${minReading.date} ${minReading.time}` : '--';
+      }
+      if (elCompliance) {
+        elCompliance.textContent = `${compliance}%`;
+        elCompliance.className = `font-headline text-3xl font-bold ${Number(compliance) >= 95 ? 'text-emerald-700' : Number(compliance) >= 80 ? 'text-amber-600' : 'text-red-600'}`;
+      }
 
-      // Populate company info from localStorage
+      // Update statistics
+      const statTotal = document.getElementById('stat-total-readings');
+      const statDevices = document.getElementById('stat-active-devices');
+      const statCoverage = document.getElementById('stat-coverage');
+      const statStdDev = document.getElementById('stat-stddev');
+      const statStability = document.getElementById('stat-stability');
+      const readingsBadge = document.getElementById('total-readings-badge');
+      
+      if (statTotal) statTotal.textContent = data.length.toString();
+      if (statDevices) statDevices.textContent = `${activeDevices} de ${uniqueDevices.length}`;
+      if (statCoverage) statCoverage.textContent = coverage;
+      if (statStdDev) statStdDev.textContent = `±${stdDev.toFixed(2)}°C`;
+      if (statStability) statStability.textContent = `${stability}%`;
+      if (readingsBadge) readingsBadge.textContent = `${data.length} Leituras`;
+
+      // Populate company info
       const companyName = localStorage.getItem('profile_company') || 'Get Temp Ltda';
       const companyLocation = localStorage.getItem('profile_company_location') || 'São Paulo, SP - Brasil';
       const companyCnpj = localStorage.getItem('profile_company_cnpj') || '00.000.000/0001-00';
@@ -1028,66 +1830,312 @@ document.addEventListener("DOMContentLoaded", () => {
       if (elCompanyLocation) elCompanyLocation.textContent = companyLocation;
       if (elCompanyCnpj) elCompanyCnpj.textContent = companyCnpj;
 
+      // Draw professional chart
       if (hasGraphs && elChartSec) {
-         const chartContainer = elChartSec.querySelector('#dynamic-chart-container');
-         if (chartContainer) {
-            chartContainer.innerHTML = ''; // Limpa as barras hardcoded caso existam
-            const totalBars = Math.min(data.length, 120); // render max 120 nodes so dom doesn't explode
-            const step = Math.ceil(data.length / totalBars);
-            for (let i = 0; i < totalBars; i++) {
-               const sample = data[i * step];
-               if(!sample) break;
-               
-               const pct = Math.max(10, Math.min(100, ((sample.temp + 40) / 40) * 90 + 10));
-               const isCritical = sample.temp > -15 || sample.temp < -25;
-               const bgClass = isCritical ? 'bg-error' : 'bg-primary';
-               
-               chartContainer.insertAdjacentHTML('beforeend', `<div class="flex-1 ${bgClass} rounded-t-sm transition-all duration-300" style="height: ${pct}%;"></div>`);
+        const chartLine = document.getElementById('chart-line-fill');
+        const chartArea = document.getElementById('chart-area-fill');
+        const currentPoint = document.getElementById('current-point-report');
+        const safeZone = document.getElementById('safe-zone-rect');
+        const limitUpper = document.getElementById('limit-upper');
+        const limitLower = document.getElementById('limit-lower');
+        
+        const svgWidth = 900;
+        const svgHeight = 300;
+        const padding = { left: 60, right: 20, top: 20, bottom: 40 };
+        const chartWidth = svgWidth - padding.left - padding.right;
+        const chartHeight = svgHeight - padding.top - padding.bottom;
+        
+        // Dynamic limits - use device-specific limits from camera registration
+        const firstDeviceId = data[0]?.device_id;
+        const chartLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+        const upperLimit = chartLimits.max;
+        const lowerLimit = chartLimits.min;
+        const limitBuffer = Math.abs(max - min) * 0.1;
+        const chartMin = Math.min(lowerLimit - 5, min - 3);
+        const chartMax = Math.max(upperLimit + 5, max + 3);
+        const chartRange = chartMax - chartMin;
+        
+        const mapY = (temp: number) => padding.top + chartHeight - ((temp - chartMin) / chartRange) * chartHeight;
+        const mapX = (idx: number) => padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
+        
+        const points = data.map((r, idx) => ({
+            x: mapX(idx),
+            y: mapY(r.temp),
+            temp: r.temp,
+            time: r.time,
+            date: r.date
+        }));
+        
+        // Build paths (skip NaN values)
+        let linePath = '';
+        if (points.length > 0 && !isNaN(points[0].y)) {
+            linePath = `M ${points[0].x} ${points[0].y}`;
+            for (let i = 1; i < points.length; i++) {
+                if (!isNaN(points[i].y)) {
+                    linePath += ` L ${points[i].x} ${points[i].y}`;
+                }
             }
-         }
-      }
+        }
+        let areaPath = linePath;
+        if (points.length > 0 && !isNaN(points[points.length - 1].y)) {
+            areaPath += ` L ${points[points.length - 1].x} ${svgHeight - padding.bottom} L ${points[0].x} ${svgHeight - padding.bottom} Z`;
+        }
+        
+        if (chartLine) chartLine.setAttribute('d', linePath);
+        if (chartArea) chartArea.setAttribute('d', areaPath);
+        
+        // Current point
+        if (currentPoint && points.length > 0) {
+            const latest = points[points.length - 1];
+            currentPoint.setAttribute('transform', `translate(${latest.x}, ${latest.y})`);
+        }
+        
+        // Safe zone
+        if (safeZone) {
+            const zoneY = mapY(upperLimit);
+            const zoneHeight = mapY(lowerLimit) - zoneY;
+            safeZone.setAttribute('x', padding.left.toString());
+            safeZone.setAttribute('y', zoneY.toString());
+            safeZone.setAttribute('width', chartWidth.toString());
+            safeZone.setAttribute('height', Math.max(0, zoneHeight).toString());
+        }
+        
+        // Limit lines
+        if (limitUpper) {
+            limitUpper.setAttribute('x1', padding.left.toString());
+            limitUpper.setAttribute('y1', mapY(upperLimit).toString());
+            limitUpper.setAttribute('x2', (svgWidth - padding.right).toString());
+            limitUpper.setAttribute('y2', mapY(upperLimit).toString());
+        }
+        if (limitLower) {
+            limitLower.setAttribute('x1', padding.left.toString());
+            limitLower.setAttribute('y1', mapY(lowerLimit).toString());
+            limitLower.setAttribute('x2', (svgWidth - padding.right).toString());
+            limitLower.setAttribute('y2', mapY(lowerLimit).toString());
+        }
+        
+        // Y-axis labels
+        const yLabels = document.getElementById('chart-y-labels');
+        if (yLabels) {
+            yLabels.innerHTML = `
+                <span>${chartMax.toFixed(0)}°</span>
+                <span>${((chartMax + chartMin) / 2).toFixed(0)}°</span>
+                <span>${chartMin.toFixed(0)}°</span>
+            `;
+        }
+        
+        // Grid lines
+        const grid = document.getElementById('chart-grid');
+        if (grid) {
+            grid.innerHTML = '';
+            for (let i = 0; i <= 5; i++) {
+                const y = padding.top + (i / 5) * chartHeight;
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', padding.left.toString());
+                line.setAttribute('y1', y.toString());
+                line.setAttribute('x2', (svgWidth - padding.right).toString());
+                line.setAttribute('y2', y.toString());
+                grid.appendChild(line);
+            }
+        }
+        
+        // Add peak and valley indicators
+        const peakIdx = points.findIndex(p => p.temp === max);
+        const valleyIdx = points.findIndex(p => p.temp === min);
+        
+        const reportPeakIndicator = document.getElementById('report-peak-indicator');
+        if (reportPeakIndicator && peakIdx !== -1) {
+            reportPeakIndicator.setAttribute('transform', `translate(${points[peakIdx].x}, ${points[peakIdx].y})`);
+            reportPeakIndicator.classList.remove('opacity-0');
+        }
+        
+        const reportValleyIndicator = document.getElementById('report-valley-indicator');
+        if (reportValleyIndicator && valleyIdx !== -1 && valleyIdx !== peakIdx) {
+            reportValleyIndicator.setAttribute('transform', `translate(${points[valleyIdx].x}, ${points[valleyIdx].y})`);
+            reportValleyIndicator.classList.remove('opacity-0');
+        }
 
-      if (tbl) {
-        if (type.includes('Auditoria') || type.includes('Risco')) {
-           const safeCount = data.filter(d => d.temp >= -25 && d.temp <= -15).length;
-           const safePercent = (safeCount / data.length * 100).toFixed(1);
-           
-           if (elStatsGrid) {
-              elStatsGrid.innerHTML = `
-                 <div class="p-6 bg-surface-container rounded-md col-span-2 shadow-sm border border-outline-variant/10">
-                    <p class="text-[10px] font-bold text-outline uppercase tracking-widest mb-1">Taxa de Conformidade</p>
-                    <p class="font-headline text-4xl font-bold ${Number(safePercent) > 90 ? 'text-primary' : 'text-error'} mb-1">${safePercent}%</p>
-                    <p class="text-sm font-semibold text-on-surface-variant">${safeCount} de ${data.length} leituras auditadas ficaram em margem segura (-25°C a -15°C).</p>
-                 </div>
-              `;
-           }
-           if (elTableTitle) elTableTitle.textContent = "Desvios Críticos e Exceções Lógicas (Raw Data)";
-           
-           tbl.innerHTML = [...data].reverse().map(d => {
-             const isWarning = d.connection !== 'Connected' || d.temp > -15 || d.temp < -25;
-             if (!isWarning) return ''; // na auditoria se o user quer todas, vamos injetar tds ou n?
-             // "necessário que todos os registros da base" ah, auditoria mostra tudo mas sinaliza
-             return `<div class="flex items-center justify-between py-2 border-b border-surface-container/30 text-sm">
-                <span class="font-medium ${isWarning ? 'text-error font-bold' : 'text-on-surface-variant'}">${d.date} ${d.time} <span class="font-normal opacity-60">| ${d.name}</span></span>
-                <span class="${isWarning ? 'font-bold text-error' : 'font-semibold'}">${d.temp}°C - ${d.connection}</span>
-             </div>`;
-           }).join('');
-        } else {
-           // Relatório Completo Raw Data
-           if (elTableTitle) elTableTitle.textContent = "Log Integral de Leitura Contínua";
-           
-           tbl.innerHTML = [...data].reverse().map(d => {
-             const isWarning = d.connection !== 'Connected' || d.temp > -15 || d.temp < -25;
-             return `<div class="flex items-center justify-between py-1.5 border-b border-surface-container/20 text-xs">
-                <span class="font-medium ${isWarning ? 'text-error' : 'text-on-surface-variant'}">${d.date} ${d.time} <span class="font-normal opacity-50">| ${d.name} | ID:${d.device_id}</span></span>
-                <span class="${isWarning ? 'font-bold bg-error/10 text-error px-1 rounded' : 'font-semibold text-primary'}">${d.temp.toFixed(1)}°C</span>
-             </div>`;
-           }).join('');
+        // Generate X-axis labels for report chart
+        const reportXAxis = document.getElementById('report-x-axis');
+        if (reportXAxis && data.length > 0) {
+            const numLabels = Math.min(6, Math.max(3, Math.ceil(data.length / 10)));
+            const step = Math.max(1, Math.floor((data.length - 1) / (numLabels - 1)));
+            let labels = '';
+
+            for (let i = 0; i < numLabels; i++) {
+                const idx = Math.min(i * step, data.length - 1);
+                if (idx >= data.length) continue;
+                const r = data[idx];
+                const readingDate = new Date(`${r.date}T${r.time}`);
+                const now = new Date();
+                const hoursDiff = (now.getTime() - readingDate.getTime()) / (1000 * 60 * 60);
+
+                let label;
+                if (hoursDiff <= 24) {
+                    label = r.time.substring(0, 5);
+                } else {
+                    label = readingDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+                }
+                labels += `<span class="px-1">${label}</span>`;
+            }
+            reportXAxis.innerHTML = labels;
         }
       }
 
+      // Generate Insights
+      const insightsContainer = document.getElementById('insights-container');
+      if (insightsContainer) {
+        const insights: string[] = [];
+        
+        // Compliance insight
+        if (Number(compliance) >= 95) {
+            insights.push('✓ Excelente conformidade térmica. Sistema operating within safe parameters.');
+        } else if (Number(compliance) >= 80) {
+            insights.push('⚠ Conformidade moderada. Recomenda-se revisão dos limites de temperatura.');
+        } else {
+            insights.push('✗ Baixa conformidade. Ação imediata requerida para corrective measures.');
+        }
+        
+        // Temperature variance insight
+        if (stdDev < 2) {
+            insights.push('✓ Estabilidade excelente. Baixa variabilidade indica sistema de refrigeração otimizado.');
+        } else if (stdDev < 5) {
+            insights.push('⚠ Variabilidade moderada. Monitorar ciclos de compressor e door openings.');
+        } else {
+            insights.push('✗ Alta variabilidade térmica. Investigar possível falha no sistema de controle.');
+        }
+        
+        // Device insight
+        if (activeDevices === uniqueDevices.length) {
+            insights.push('✓ Todos os dispositivos operacionais. Rede de monitoramento fully functional.');
+        } else {
+            insights.push(`⚠ ${uniqueDevices.length - activeDevices} dispositivo(s) offline. Verificar conectividade.`);
+        }
+        
+        // Max/Min insight based on device-specific limits
+        const reportDeviceId = data[0]?.device_id;
+        const reportLimits = reportDeviceId ? getDeviceLimits(reportDeviceId) : { min: -25, max: -15 };
+        
+        if (max > reportLimits.max) {
+            insights.push(`⚠ Temperatura máxima acima do limite seguro (${reportLimits.max}°C). Risco de comprometimento de produtos.`);
+        }
+        if (min < reportLimits.min) {
+            insights.push(`⚠ Temperatura mínima abaixo do limite seguro (${reportLimits.min}°C). Risco de congelamento excessivo.`);
+        }
+        
+        // Recommendation
+        insights.push('📋 Recomendação: Realizar manutenção preventiva trimestral e calibrar sensores.');
+        
+        insightsContainer.innerHTML = insights.map(insight => `
+            <div class="flex items-start gap-2 text-sm ${insight.includes('✓') ? 'text-emerald-700' : insight.includes('⚠') ? 'text-amber-700' : insight.includes('✗') ? 'text-red-700' : 'text-slate-700'}">
+                <span class="font-bold">${insight}</span>
+            </div>
+        `).join('');
+      }
+
+      // Populate table
+      const tbl = document.getElementById('report-records-table');
+      const recordsPerPage = 20;
+      let currentPage = 1;
+      
+      const updateTable = () => {
+          if (!tbl) return;
+          const totalRecords = data.length;
+          const totalPages = Math.ceil(totalRecords / recordsPerPage);
+          const startIdx = (currentPage - 1) * recordsPerPage;
+          const endIdx = Math.min(startIdx + recordsPerPage, totalRecords);
+          const pageData = [...data].reverse().slice(startIdx, endIdx);
+          
+          tbl.innerHTML = pageData.map(d => {
+              const devConfig = storedCameras[d.device_id];
+              const displayName = devConfig?.name || d.name || d.device_id;
+              const limits = getDeviceLimits(d.device_id);
+              const isOutOfRange = d.temp > limits.max || d.temp < limits.min;
+              const isWarning = d.connection !== 'Connected' || isOutOfRange;
+              const statusClass = isWarning ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
+              const statusText = d.connection !== 'Connected' ? 'Offline' : isWarning ? 'Alerta' : 'Normal';
+              
+              return `<tr class="hover:bg-slate-50 transition-colors">
+                  <td class="py-3 px-4 text-slate-600">${d.date} ${d.time}</td>
+                  <td class="py-3 px-4 font-medium text-slate-900">${displayName}</td>
+                  <td class="py-3 px-4 text-right font-bold ${isWarning ? 'text-red-600' : 'text-slate-900'}">${d.temp.toFixed(1)}°C</td>
+                  <td class="py-3 px-4 text-right text-slate-500">${d.wifi_rssi} dBm</td>
+                  <td class="py-3 px-4 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusClass}">${statusText}</span></td>
+              </tr>`;
+          }).join('');
+          
+          // Update pagination info
+          const showingStart = document.getElementById('showing-start');
+          const showingEnd = document.getElementById('showing-end');
+          const totalRecordsEl = document.getElementById('total-records');
+          if (showingStart) showingStart.textContent = (startIdx + 1).toString();
+          if (showingEnd) showingEnd.textContent = endIdx.toString();
+          if (totalRecordsEl) totalRecordsEl.textContent = totalRecords.toString();
+          
+          // Update buttons
+          const prevBtn = document.getElementById('pagination-prev') as HTMLButtonElement;
+          const nextBtn = document.getElementById('pagination-next') as HTMLButtonElement;
+          if (prevBtn) prevBtn.disabled = currentPage === 1;
+          if (nextBtn) nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+      };
+      
+      if (tbl && data.length > recordsPerPage) {
+          document.getElementById('pagination-prev')?.addEventListener('click', () => {
+              currentPage = Math.max(1, currentPage - 1);
+              updateTable();
+          });
+          document.getElementById('pagination-next')?.addEventListener('click', () => {
+              const totalPages = Math.ceil(data.length / recordsPerPage);
+              currentPage = Math.min(totalPages, currentPage + 1);
+              updateTable();
+          });
+      }
+      
+      updateTable();
+
+      // Print button - render all data before printing
       document.getElementById('btn-pdf')?.addEventListener('click', () => {
-         window.print();
+          // Store current page
+          const prevBtn = document.getElementById('pagination-prev');
+          const nextBtn = document.getElementById('pagination-next');
+          const paginationDiv = document.getElementById('report-pagination');
+          
+          // Show all records for printing
+          if (tbl) {
+              tbl.innerHTML = [...data].reverse().map(d => {
+                  const devConfig = storedCameras[d.device_id];
+                  const displayName = devConfig?.name || d.name || d.device_id;
+                  const limits = getDeviceLimits(d.device_id);
+                  const isOutOfRange = d.temp > limits.max || d.temp < limits.min;
+                  const isWarning = d.connection !== 'Connected' || isOutOfRange;
+                  const statusClass = isWarning ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
+                  const statusText = d.connection !== 'Connected' ? 'Offline' : isWarning ? 'Alerta' : 'Normal';
+                  
+                  return `<tr class="hover:bg-slate-50 transition-colors">
+                      <td class="py-3 px-4 text-slate-600">${d.date} ${d.time}</td>
+                      <td class="py-3 px-4 font-medium text-slate-900">${displayName}</td>
+                      <td class="py-3 px-4 text-right font-bold ${isWarning ? 'text-red-600' : 'text-slate-900'}">${d.temp.toFixed(1)}°C</td>
+                      <td class="py-3 px-4 text-right text-slate-500">${d.wifi_rssi} dBm</td>
+                      <td class="py-3 px-4 text-center"><span class="px-2 py-1 rounded-full text-xs font-bold ${statusClass}">${statusText}</span></td>
+                  </tr>`;
+              }).join('');
+          }
+          
+          // Hide pagination for print
+          if (paginationDiv) paginationDiv.classList.add('hidden');
+          if (prevBtn) prevBtn.classList.add('hidden');
+          if (nextBtn) nextBtn.classList.add('hidden');
+          
+          // Print
+          window.print();
+          
+          // Restore pagination after print
+          setTimeout(() => {
+              if (paginationDiv) paginationDiv.classList.remove('hidden');
+              if (prevBtn) prevBtn.classList.remove('hidden');
+              if (nextBtn) nextBtn.classList.remove('hidden');
+              updateTable();
+          }, 100);
       });
     });
   }
@@ -1194,6 +2242,60 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // Show/hide configuration panels based on toggle states
+    const toggleDailySummary = document.getElementById('toggle-daily-summary') as HTMLInputElement;
+    const dailySummaryConfig = document.getElementById('daily-summary-config');
+    if (toggleDailySummary && dailySummaryConfig) {
+      toggleDailySummary.addEventListener('change', () => {
+        if (toggleDailySummary.checked) {
+          dailySummaryConfig.classList.remove('hidden');
+        } else {
+          dailySummaryConfig.classList.add('hidden');
+        }
+      });
+      // Initial state
+      if (toggleDailySummary.checked) {
+        dailySummaryConfig.classList.remove('hidden');
+      }
+    }
+
+    const toggleMaintenance = document.getElementById('toggle-maintenance') as HTMLInputElement;
+    const maintenanceSection = document.querySelector('.bg-surface-container-lowest:has(#maintenance-date)');
+    if (toggleMaintenance && maintenanceSection) {
+      toggleMaintenance.addEventListener('change', () => {
+        if (toggleMaintenance.checked) {
+          maintenanceSection.classList.remove('hidden');
+        } else {
+          maintenanceSection.classList.add('hidden');
+        }
+      });
+      // Initial state
+      const maintenanceEnabled = localStorage.getItem('notification_toggle_2') === 'true';
+      if (maintenanceEnabled) {
+        maintenanceSection.classList.remove('hidden');
+      } else {
+        maintenanceSection.classList.add('hidden');
+      }
+    }
+
+    // Save daily summary configuration
+    const btnSaveDailySummary = document.getElementById('btn-save-daily-summary');
+    if (btnSaveDailySummary) {
+      btnSaveDailySummary.addEventListener('click', () => {
+        const time = (document.getElementById('daily-summary-time') as HTMLInputElement).value;
+        const day = (document.getElementById('daily-summary-day') as HTMLSelectElement).value;
+        
+        localStorage.setItem('daily_summary_time', time);
+        localStorage.setItem('daily_summary_day', day);
+        
+        const toast = document.createElement('div');
+        toast.textContent = 'Configuração do resumo diário salva!';
+        toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+      });
+    }
+
     // Toggle Feedback & Save
     const toggles = document.querySelectorAll('input[type="checkbox"]');
     toggles.forEach(toggle => {
@@ -1220,6 +2322,282 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
       });
     });
+
+    // --- Data Management: Reset & Delete ---
+    const btnResetReadings = document.getElementById('btn-reset-readings');
+    const btnDeleteReading = document.getElementById('btn-delete-reading');
+    const confirmResetModal = document.getElementById('confirm-reset-modal');
+    const confirmDeleteModal = document.getElementById('confirm-delete-modal');
+    const resetConfirmInput = document.getElementById('reset-confirm-input') as HTMLInputElement;
+    const deleteConfirmInput = document.getElementById('delete-confirm-input') as HTMLInputElement;
+    const btnConfirmReset = document.getElementById('btn-confirm-reset');
+    const btnConfirmDelete = document.getElementById('btn-confirm-delete');
+    const operationLogs = document.getElementById('operation-logs');
+
+    // --- Maintenance Reminder System ---
+    const maintenanceDateInput = document.getElementById('maintenance-date') as HTMLInputElement;
+    const maintenancePeriodSelect = document.getElementById('maintenance-period') as HTMLSelectElement;
+    const btnSaveMaintenance = document.getElementById('btn-save-maintenance');
+    const maintenanceRemindersContainer = document.getElementById('maintenance-reminders');
+
+    // Load saved maintenance reminders
+    const loadMaintenanceReminders = () => {
+      const reminders = JSON.parse(localStorage.getItem('maintenance_reminders') || '[]');
+      const maintenanceToggles = document.querySelector('#toggle-maintenance') as HTMLInputElement;
+      const isEnabled = localStorage.getItem('notification_toggle_2') === 'true';
+      
+      if (!maintenanceRemindersContainer) return;
+      
+      if (!isEnabled || reminders.length === 0) {
+        if (!isEnabled) {
+          maintenanceRemindersContainer.innerHTML = '<p class="text-sm text-on-surface-variant italic">Lembretes desativados. Ative acima para configurar.</p>';
+        } else if (reminders.length === 0) {
+          maintenanceRemindersContainer.innerHTML = '<p class="text-sm text-on-surface-variant italic">Nenhum lembrete configurado.</p>';
+        }
+        return;
+      }
+      
+      const now = Date.now();
+      maintenanceRemindersContainer.innerHTML = reminders.map((r: any) => {
+        const dueDate = new Date(r.date).getTime();
+        const isOverdue = dueDate < now;
+        const isDueSoon = dueDate - now < 7 * 24 * 60 * 60 * 1000; // 7 days
+        
+        let statusClass = 'bg-green-100 text-green-700';
+        let statusText = 'Agendado';
+        if (isOverdue) {
+          statusClass = 'bg-red-100 text-red-700';
+          statusText = 'Atrasado';
+        } else if (isDueSoon) {
+          statusClass = 'bg-amber-100 text-amber-700';
+          statusText = 'Em breve';
+        }
+        
+        return `
+          <div class="flex items-center justify-between p-3 bg-surface-container-low rounded-lg">
+            <div>
+              <p class="font-semibold text-on-surface">${r.title || 'Manutenção'}</p>
+              <p class="text-xs text-on-surface-variant">${new Date(r.date).toLocaleDateString('pt-BR')}</p>
+            </div>
+            <span class="px-2 py-1 rounded-full text-xs font-bold ${statusClass}">${statusText}</span>
+          </div>
+        `;
+      }).join('');
+    };
+
+    // Check for due maintenance and trigger alerts
+    const checkMaintenanceAlerts = () => {
+      const reminders = JSON.parse(localStorage.getItem('maintenance_reminders') || '[]');
+      const now = Date.now();
+      const triggered = localStorage.getItem('maintenance_alerts_triggered') || '[]';
+      const triggeredArray = JSON.parse(triggered);
+      
+      reminders.forEach((r: any) => {
+        const dueDate = new Date(r.date).getTime();
+        const daysUntil = (dueDate - now) / (24 * 60 * 60 * 1000);
+        
+        // Alert if overdue or due within 7 days and not yet triggered
+        if ((daysUntil <= 0 || daysUntil <= 7) && !triggeredArray.includes(r.date)) {
+          triggeredArray.push(r.date);
+          localStorage.setItem('maintenance_alerts_triggered', JSON.stringify(triggeredArray));
+          
+          // Add alert to logs
+          addOperationLog('MANUTENÇÃO', `Lembrete: ${r.title || 'Manutenção agendada para ' + new Date(r.date).toLocaleDateString('pt-BR')}`);
+          
+          // Show in-app notification
+          const toast = document.createElement('div');
+          toast.textContent = `🔧 Lembrete de Manutenção: ${r.title || 'Manutenção agendada'} - ${daysUntil <= 0 ? 'ATRASADO' : 'em ' + Math.round(daysUntil) + ' dias'}`;
+          toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#f97316; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+          document.body.appendChild(toast);
+          setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
+        }
+      });
+    };
+
+    // Save maintenance reminder
+    if (btnSaveMaintenance && maintenanceDateInput && maintenancePeriodSelect) {
+      btnSaveMaintenance.addEventListener('click', () => {
+        const date = maintenanceDateInput.value;
+        const period = maintenancePeriodSelect.value;
+        
+        if (!date) {
+          alert('Por favor, selecione uma data.');
+          return;
+        }
+        
+        const reminders = JSON.parse(localStorage.getItem('maintenance_reminders') || '[]');
+        const newReminder = {
+          date: date,
+          period: period,
+          title: `Manutenção ${period === 'once' ? 'única' : 'recorrente (' + period + ' dias)'}`,
+          createdAt: new Date().toISOString()
+        };
+        
+        reminders.push(newReminder);
+        localStorage.setItem('maintenance_reminders', JSON.stringify(reminders));
+        
+        // Clear triggered alerts for new reminders
+        localStorage.setItem('maintenance_alerts_triggered', '[]');
+        
+        loadMaintenanceReminders();
+        
+        const toast = document.createElement('div');
+        toast.textContent = 'Lembrete salvo com sucesso!';
+        toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+      });
+    }
+
+    // Initial load
+    loadMaintenanceReminders();
+    checkMaintenanceAlerts();
+
+    // Check maintenance alerts periodically (every hour)
+    setInterval(checkMaintenanceAlerts, 60 * 60 * 1000);
+
+    // Function to add log entry
+    const addOperationLog = (action: string, details: string) => {
+      const logs = JSON.parse(localStorage.getItem('operation_logs') || '[]');
+      const entry = {
+        timestamp: new Date().toISOString(),
+        action,
+        details,
+      };
+      logs.unshift(entry);
+      if (logs.length > 50) logs.pop();
+      localStorage.setItem('operation_logs', JSON.stringify(logs));
+      renderOperationLogs();
+    };
+
+    // Render operation logs
+    const renderOperationLogs = () => {
+      if (!operationLogs) return;
+      const logs = JSON.parse(localStorage.getItem('operation_logs') || '[]');
+      if (logs.length === 0) {
+        operationLogs.innerHTML = '<p class="italic">Nenhuma operação registrada.</p>';
+        return;
+      }
+      operationLogs.innerHTML = logs.map((log: any) => `
+        <div class="flex justify-between text-xs">
+          <span class="text-error font-semibold">${log.action}</span>
+          <span class="text-outline">${new Date(log.timestamp).toLocaleString('pt-BR')}</span>
+        </div>
+        <p class="text-[10px] text-on-surface-variant ml-2">${log.details}</p>
+      `).join('');
+    };
+
+    // Load logs on page load
+    renderOperationLogs();
+
+    // Reset confirmation handlers
+    if (btnResetReadings) {
+      btnResetReadings.addEventListener('click', () => {
+        confirmResetModal?.classList.remove('hidden');
+        resetConfirmInput.value = '';
+        btnConfirmReset?.setAttribute('disabled', 'true');
+      });
+    }
+
+    if (resetConfirmInput && btnConfirmReset) {
+      resetConfirmInput.addEventListener('input', () => {
+        if (resetConfirmInput.value.toLowerCase() === 'quero resetar') {
+          btnConfirmReset.removeAttribute('disabled');
+        } else {
+          btnConfirmReset.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnConfirmReset.addEventListener('click', () => {
+        // Clear readings from dataService
+        clearAllReadings();
+        
+        addOperationLog('RESET', 'Todas as leituras históricas foram removidas');
+        
+        confirmResetModal?.classList.add('hidden');
+        
+        const toast = document.createElement('div');
+        toast.textContent = 'Leituras resetadas com sucesso!';
+        toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+      });
+    }
+
+    // Delete confirmation handlers
+    if (btnDeleteReading) {
+      btnDeleteReading.addEventListener('click', () => {
+        confirmDeleteModal?.classList.remove('hidden');
+        deleteConfirmInput.value = '';
+        btnConfirmDelete?.setAttribute('disabled', 'true');
+      });
+    }
+
+    if (deleteConfirmInput && btnConfirmDelete) {
+      deleteConfirmInput.addEventListener('input', () => {
+        if (deleteConfirmInput.value.toLowerCase() === 'quero excluir') {
+          btnConfirmDelete.removeAttribute('disabled');
+        } else {
+          btnConfirmDelete.setAttribute('disabled', 'true');
+        }
+      });
+
+      btnConfirmDelete.addEventListener('click', () => {
+        const readingId = (document.getElementById('delete-reading-id') as HTMLInputElement).value.trim();
+        if (!readingId) {
+          alert('Por favor, informe o ID da leitura.');
+          return;
+        }
+
+        // Delete the reading using dataService
+        const deleted = deleteReadingById(readingId);
+        if (deleted) {
+          addOperationLog('EXCLUSÃO', `Leitura removida: ${readingId}`);
+          
+          confirmDeleteModal?.classList.add('hidden');
+          
+          const toast = document.createElement('div');
+          toast.textContent = 'Leitura excluída com sucesso!';
+          toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+          document.body.appendChild(toast);
+          setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+        } else {
+          alert('Leitura não encontrada. Verifique o ID.');
+        }
+      });
+    }
+
+    // Download Exclusion History
+    const btnDownloadExclusions = document.getElementById('btn-download-exclusions');
+    if (btnDownloadExclusions) {
+      btnDownloadExclusions.addEventListener('click', () => {
+        const logs = JSON.parse(localStorage.getItem('operation_logs') || '[]');
+        const exclusionLogs = logs.filter((log: any) => log.action === 'EXCLUSÃO' || log.action === 'RESET');
+        
+        if (exclusionLogs.length === 0) {
+          alert('Nenhum histórico de exclusões disponível.');
+          return;
+        }
+        
+        const content = exclusionLogs.map((log: any) => 
+          `Data: ${new Date(log.timestamp).toLocaleString('pt-BR')}\nAção: ${log.action}\nDetalhes: ${log.details}\n`
+        ).join('--- ---\n');
+        
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `historico_exclusoes_${new Date().toISOString().split('T')[0]}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        const toast = document.createElement('div');
+        toast.textContent = 'Histórico baixado com sucesso!';
+        toast.style.cssText = 'position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600; z-index:9999;';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2000);
+      });
+    }
 
     // Populate Cameras
     const grid = document.getElementById('cameras-grid');

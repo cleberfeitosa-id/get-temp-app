@@ -120,110 +120,49 @@
 <h2 class="text-sm font-bold uppercase tracking-widest text-outline">Estabilidade (Última 1h)</h2>
 <span class="text-[12px] font-semibold text-primary">Live</span>
 </div>
-<div class="w-full h-40 bg-surface-container-low rounded-lg p-6 flex flex-col justify-end gap-4 overflow-hidden relative">
+<div class="w-full h-40 bg-surface-container-low rounded-lg p-4 flex flex-col justify-end gap-2 overflow-hidden relative">
+<!-- Y-Axis Labels -->
+<div id="details-y-axis" class="absolute left-1 top-2 bottom-8 w-8 flex flex-col justify-between text-[9px] font-bold text-slate-500 pointer-events-none z-10">
+<span>--°</span>
+<span>--°</span>
+<span>--°</span>
+</div>
 <!-- Abstract Graph Line -->
-<div class="absolute inset-0 flex items-end px-2 py-4">
-<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 400 100">
-<path d="M0 80 Q 20 75, 40 82 T 80 78 T 120 85 T 160 77 T 200 83 T 240 76 T 280 81 T 320 79 T 360 84 T 400 80" fill="none" stroke="var(--primary)" stroke-linecap="round" stroke-width="3"></path>
-<path d="M0 80 Q 20 75, 40 82 T 80 78 T 120 85 T 160 77 T 200 83 T 240 76 T 280 81 T 320 79 T 360 84 T 400 80 V 100 H 0 Z" fill="url(#graphGradient)" opacity="0.1"></path>
+<div id="details-chart-container" class="absolute inset-0 left-8 right-2 top-2 bottom-8">
+<svg id="details-chart-svg" class="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
+<path id="details-chart-line" d="M0 80 Q 20 75, 40 82 T 80 78 T 120 85 T 160 77 T 200 83 T 240 76 T 280 81 T 320 79 T 360 84 T 400 80" fill="none" stroke="#64748b" stroke-linecap="round" stroke-width="2"></path>
+<path id="details-chart-area" d="M0 80 Q 20 75, 40 82 T 80 78 T 120 85 T 160 77 T 200 83 T 240 76 T 280 81 T 320 79 T 360 84 T 400 80 V 100 H 0 Z" fill="url(#graphGradient)" opacity="0.15"></path>
+<!-- Peak Indicator (Maximum) -->
+<g id="details-peak-indicator" class="opacity-0">
+<circle r="6" fill="#f59e0b" opacity="0.3"></circle>
+<circle r="3" fill="#f59e0b"></circle>
+</g>
+<!-- Valley Indicator (Minimum) -->
+<g id="details-valley-indicator" class="opacity-0">
+<circle r="6" fill="#06b6d4" opacity="0.3"></circle>
+<circle r="3" fill="#06b6d4"></circle>
+</g>
 <defs>
 <lineargradient id="graphGradient" x1="0" x2="0" y1="0" y2="1">
-<stop offset="0%" stop-color="var(--primary)"></stop>
+<stop offset="0%" stop-color="#64748b"></stop>
 <stop offset="100%" stop-color="transparent"></stop>
 </lineargradient>
 </defs>
 </svg>
 </div>
 <!-- Time Markers -->
-<div class="flex justify-between w-full text-[10px] font-bold text-outline uppercase tracking-tighter z-10">
-<span>14:00</span>
-<span>14:15</span>
-<span>14:30</span>
-<span>14:45</span>
-<span>Agora</span>
+<div id="details-x-axis" class="flex justify-between w-full text-[9px] font-bold text-slate-500 uppercase tracking-tighter z-10 pl-8 pr-2">
+<!-- Injetado dinamicamente -->
 </div>
 </div>
 </section>
-<!-- Status Grid (Bento Style) -->
-<section class="grid grid-cols-2 gap-4 mb-8">
-<!-- Compressor -->
-<div class="col-span-1 bg-surface-container-lowest glass-card p-5 rounded-lg flex flex-col gap-4">
-<div class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-primary" data-icon="settings_slow_motion">settings_slow_motion</span>
-</div>
-<div>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline block">Compressor</span>
-<span class="text-xl font-headline font-bold text-on-surface">Ligado</span>
-</div>
-</div>
-<!-- Defrost -->
-<div class="col-span-1 bg-surface-container-lowest glass-card p-5 rounded-lg flex flex-col gap-4">
-<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center">
-<span class="material-symbols-outlined text-outline" data-icon="ac_unit">ac_unit</span>
-</div>
-<div>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline block">Degelo</span>
-<span class="text-xl font-headline font-bold text-on-surface">Inativo</span>
-</div>
-</div>
-<!-- Door Status -->
-<div class="col-span-2 bg-surface-container-lowest glass-card p-5 rounded-lg flex items-center justify-between">
-<div class="flex items-center gap-4">
-<div class="w-12 h-12 rounded-full bg-tertiary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-on-tertiary-fixed-variant" data-icon="sensor_door">sensor_door</span>
-</div>
-<div>
-<span class="text-[10px] font-bold uppercase tracking-widest text-outline block">Porta</span>
-<span class="text-xl font-headline font-bold text-on-surface">Fechada</span>
-</div>
-</div>
-<div class="text-right">
-<span class="text-[10px] font-bold text-outline uppercase block">Últ. Abertura</span>
-<span class="font-medium text-on-surface-variant">Há 45 min</span>
-</div>
-</div>
-</section>
-<!-- Recent Logs Section -->
+<!-- Alerts / Recent Logs Section -->
 <section>
-<h2 class="text-sm font-bold uppercase tracking-widest text-outline mb-4 px-1">Logs Recentes</h2>
-<div class="space-y-3">
-<!-- Log Item -->
-<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
-<div class="flex items-center gap-4">
-<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
-<div>
-<p class="font-semibold text-on-surface">Degelo automático finalizado</p>
-<span class="text-[12px] text-on-surface-variant">Hoje, 14:10</span>
+<h2 class="text-sm font-bold uppercase tracking-widest text-outline mb-4 px-1">Alertas Recentes</h2>
+<div id="chamber-alerts" class="space-y-3">
+<!-- Populated by JS -->
+<p class="text-center text-on-surface-variant py-4">Carregando alertas...</p>
 </div>
-</div>
-<span class="material-symbols-outlined text-outline-variant" data-icon="chevron_right">chevron_right</span>
-</div>
-<!-- Log Item -->
-<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
-<div class="flex items-center gap-4">
-<div class="w-2 h-2 rounded-full bg-secondary"></div>
-<div>
-<p class="font-semibold text-on-surface">Porta aberta</p>
-<span class="text-[12px] text-on-surface-variant">Hoje, 13:45</span>
-</div>
-</div>
-<span class="material-symbols-outlined text-outline-variant" data-icon="chevron_right">chevron_right</span>
-</div>
-<!-- Log Item -->
-<div class="flex items-center justify-between p-4 bg-surface-container-low rounded-lg transition-colors hover:bg-surface-container-high">
-<div class="flex items-center gap-4">
-<div class="w-2 h-2 rounded-full bg-primary"></div>
-<div>
-<p class="font-semibold text-on-surface">Ajuste de Setpoint</p>
-<span class="text-[12px] text-on-surface-variant">Ontem, 18:22</span>
-</div>
-</div>
-<span class="material-symbols-outlined text-outline-variant" data-icon="chevron_right">chevron_right</span>
-</div>
-</div>
-<button class="w-full mt-6 py-4 text-primary font-bold text-sm uppercase tracking-widest border border-dashed border-primary/20 rounded-lg hover:bg-primary/5 transition-colors">
-                Ver Histórico Completo
-            </button>
 </section>
 </main>
 <!-- BottomNavBar -->
