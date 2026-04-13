@@ -2,11 +2,13 @@
  * DATA SERVICE — Get Temp ColdChain App
  * 
  * MQTT integration for real-time sensor data from ESP32 devices.
+ * PostgreSQL database for persistence via Neon.
  */
 
 import mqtt from 'mqtt';
+import { sql } from './db.ts';
+import { initDatabase, getUserChambers, createOrUpdateChamber } from './authService.ts';
 
-// Interface for MQTT data (short field names from ESP32)
 export interface MqttReading {
   name: string;
   uid: string;
@@ -22,7 +24,6 @@ export interface MqttReading {
   conn: 'connected' | 'offline' | 'overheating' | 'spiffs_warning';
 }
 
-// Interface expected by frontend (long field names)
 export interface SensorReading {
   name: string;
   unique_reading_id: string;
@@ -36,14 +37,12 @@ export interface SensorReading {
   date: string;
   time: string;
   connection: 'Connected' | 'Disconnected' | 'Overheating' | 'SPIFFS_Warning';
-  // Optional fields for outlier detection
   isOutlier?: boolean;
   outlierReason?: string;
   invalidJump?: boolean;
   jumpDelta?: number;
 }
 
-// --- MQTT Configuration ---
 const MQTT_CONFIG = {
   brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
   topic: 'gettemp',
@@ -51,15 +50,6 @@ const MQTT_CONFIG = {
   password: 'gettemp123',
 };
 
-// Test with wildcard - uncomment if needed:
-// const MQTT_CONFIG = {
-//   brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
-//   topic: 'gettemp/#',
-//   username: 'gettemp',
-//   password: 'gettemp123',
-// };
-
-// --- Convert MQTT data to frontend format ---
 function convertToSensorReading(mqtt: MqttReading): SensorReading {
   let connection: SensorReading['connection'] = 'Disconnected';
   if (mqtt.conn === 'connected') connection = 'Connected';
@@ -82,43 +72,198 @@ function convertToSensorReading(mqtt: MqttReading): SensorReading {
   };
 }
 
-// --- Internal state ---
 let _mqttClient: mqtt.MqttClient | null = null;
 let _readings: SensorReading[] = [];
 let _listeners: ((readings: SensorReading[]) => void)[] = [];
 let _mqttInitialized = false;
+let _dbInitialized = false;
 const LAST_COMM_KEY = 'gettemp_last_communication';
-const OFFLINE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const OFFLINE_TIMEOUT_MS = 30 * 60 * 1000;
+const MAX_STORED_READINGS = 1000;
+const STORAGE_KEY = 'gettemp_readings';
 
-// Update last communication timestamp
+function getUserId(): string {
+  return localStorage.getItem('gettemp_user_id') || 'anonymous';
+}
+
+export async function initDB(): Promise<void> {
+  if (_dbInitialized) return;
+  _dbInitialized = true;
+  
+  try {
+    await initDatabase();
+    console.log('[DataService] Database initialized');
+  } catch (error) {
+    console.error('[DataService] Failed to initialize database:', error);
+  }
+}
+
+async function saveReadingToDB(reading: SensorReading): Promise<void> {
+  try {
+    const timestamp = new Date(`${reading.date}T${reading.time}`).toISOString();
+    await sql`
+      INSERT INTO readings (
+        unique_reading_id, device_id, name, device_ip, temp,
+        spiffs_usage, wifi_rssi, free_heap, uptime, date, time,
+        connection, reading_timestamp
+      ) VALUES (
+        ${reading.unique_reading_id}, ${reading.device_id}, ${reading.name},
+        ${reading.device_ip}, ${reading.temp}, ${reading.spiffs_usage},
+        ${reading.wifi_rssi}, ${reading.free_heap}, ${reading.uptime},
+        ${reading.date}, ${reading.time}, ${reading.connection}, ${timestamp}
+      )
+      ON CONFLICT (unique_reading_id) DO UPDATE SET
+        temp = EXCLUDED.temp,
+        spiffs_usage = EXCLUDED.spiffs_usage,
+        wifi_rssi = EXCLUDED.wifi_rssi,
+        free_heap = EXCLUDED.free_heap,
+        connection = EXCLUDED.connection,
+        reading_timestamp = EXCLUDED.reading_timestamp
+    `;
+    return;
+  } catch (error: any) {
+    console.warn('[DataService] DB save failed, using localStorage:', error?.message?.substring(0,50));
+  }
+  
+  saveToStorageLocal(reading);
+}
+
+function saveToStorageLocal(reading: SensorReading): void {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    let readings: SensorReading[] = [];
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      readings = parsed.readings || [];
+    }
+    
+    const existingIndex = readings.findIndex(r => r.unique_reading_id === reading.unique_reading_id);
+    if (existingIndex >= 0) {
+      readings[existingIndex] = reading;
+    } else {
+      readings.push(reading);
+    }
+    
+    if (readings.length > MAX_STORED_READINGS) {
+      readings = readings.slice(-MAX_STORED_READINGS);
+    }
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ readings, timestamp: Date.now() }));
+  } catch (e) {
+    console.warn('[DataService] Could not save to localStorage:', e);
+  }
+}
+
+async function loadFromDB(): Promise<SensorReading[]> {
+  try {
+    const userId = getUserId();
+    const isValidUUID = userId && userId !== 'anonymous' && /^[0-9a-f-]{36}$/i.test(userId);
+    
+    let result;
+    if (isValidUUID) {
+      result = await sql`
+        SELECT 
+          r.unique_reading_id, r.device_id, r.name, r.device_ip,
+          r.temp, r.spiffs_usage, r.wifi_rssi, r.free_heap, r.uptime,
+          r.date, r.time, r.connection
+        FROM readings r
+        LEFT JOIN chambers c ON r.device_id = c.id
+        WHERE c.user_id IS NULL OR c.user_id = ${userId}
+        ORDER BY r.reading_timestamp DESC
+        LIMIT ${MAX_STORED_READINGS}
+      `;
+    } else {
+      result = await sql`
+        SELECT 
+          r.unique_reading_id, r.device_id, r.name, r.device_ip,
+          r.temp, r.spiffs_usage, r.wifi_rssi, r.free_heap, r.uptime,
+          r.date, r.time, r.connection
+        FROM readings r
+        LEFT JOIN chambers c ON r.device_id = c.id
+        WHERE c.user_id IS NULL
+        ORDER BY r.reading_timestamp DESC
+        LIMIT ${MAX_STORED_READINGS}
+      `;
+    }
+    
+    if (result && result.length > 0) {
+      console.log('[DataService] Loaded', result.length, 'readings from database');
+      return result.map((row: any) => ({
+        name: row.name,
+        unique_reading_id: row.unique_reading_id,
+        device_id: row.device_id,
+        device_ip: row.device_ip,
+        temp: parseFloat(row.temp),
+        spiffs_usage: parseFloat(row.spiffs_usage),
+        wifi_rssi: row.wifi_rssi,
+        free_heap: row.free_heap,
+        uptime: row.uptime,
+        date: row.date,
+        time: row.time,
+        connection: row.connection as SensorReading['connection'],
+      }));
+    }
+  } catch (error: any) {
+    console.warn('[DataService] Could not load from database:', error?.message || error);
+  }
+  
+  console.log('[DataService] Falling back to localStorage');
+  return loadFromStorageLocal();
+}
+
+function loadFromStorageLocal(): SensorReading[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.readings) {
+        console.log('[DataService] Loaded', parsed.readings.length, 'readings from localStorage');
+        const seen = new Set<string>();
+        return parsed.readings.filter((r: SensorReading) => {
+          if (r.temp === 85 || r.temp < -55 || r.temp > 125) return false;
+          if (seen.has(r.unique_reading_id)) return false;
+          seen.add(r.unique_reading_id);
+          return true;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[DataService] Could not load from localStorage:', e);
+  }
+  console.log('[DataService] No stored data, returning empty array');
+  return [];
+}
+
 export function updateLastCommunication(): void {
   localStorage.setItem(LAST_COMM_KEY, Date.now().toString());
 }
 
-// Get time since last communication
 export function getTimeSinceLastComm(): number {
   const lastComm = localStorage.getItem(LAST_COMM_KEY);
   if (!lastComm) return Infinity;
   return Date.now() - parseInt(lastComm);
 }
 
-// Check if system is offline based on timeout
 export function isSystemOffline(): boolean {
   return getTimeSinceLastComm() > OFFLINE_TIMEOUT_MS;
 }
 
-// Export internal state for data management
 export function getInternalReadings(): SensorReading[] {
   return _readings;
 }
 
-export function clearAllReadings(): void {
+export async function clearAllReadings(): Promise<void> {
   _readings = [];
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    await sql`DELETE FROM readings`;
+    console.log('[DataService] All readings cleared from database');
+  } catch (error) {
+    console.warn('[DataService] Could not clear readings:', error);
+  }
   notifyListeners();
 }
 
-export function deleteReadingById(uniqueReadingId: string): boolean {
+export async function deleteReadingById(uniqueReadingId: string): Promise<boolean> {
   console.log('[DataService] Attempting to delete reading:', uniqueReadingId);
   console.log('[DataService] Current readings before delete:', _readings.length);
   
@@ -128,7 +273,13 @@ export function deleteReadingById(uniqueReadingId: string): boolean {
   if (index >= 0) {
     const removed = _readings.splice(index, 1);
     console.log('[DataService] Removed:', removed[0]);
-    saveToStorage();
+    
+    try {
+      await sql`DELETE FROM readings WHERE unique_reading_id = ${uniqueReadingId}`;
+    } catch (error) {
+      console.warn('[DataService] Could not delete from DB:', error);
+    }
+    
     notifyListeners();
     console.log('[DataService] Readings after delete:', _readings.length);
     return true;
@@ -137,67 +288,6 @@ export function deleteReadingById(uniqueReadingId: string): boolean {
   return false;
 }
 
-const STORAGE_KEY = 'gettemp_readings';
-const MAX_STORED_READINGS = 1000;
-
-function getUserId(): string {
-  return localStorage.getItem('gettemp_user_id') || 'anonymous';
-}
-
-function saveToStorage() {
-  try {
-    const userId = getUserId();
-    const dataToSave = {
-      userId,
-      readings: _readings,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-  } catch (e) {
-    console.warn('[DataService] Could not save to storage:', e);
-  }
-}
-
-function loadFromStorage(): SensorReading[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      const currentUserId = getUserId();
-      
-      if ((parsed.userId === currentUserId || !parsed.userId) && parsed.readings) {
-        console.log('[DataService] Loaded', parsed.readings.length, 'readings from storage');
-        
-        // Remove duplicates based on unique_reading_id and invalid temps (85°C)
-        const seen = new Set<string>();
-        const uniqueReadings = parsed.readings.filter((r: SensorReading) => {
-          // Filter out 85°C (DS18B20 error code)
-          if (r.temp === 85 || r.temp < -55 || r.temp > 125) {
-            console.log('[DataService] Removing invalid reading:', r.unique_reading_id, r.temp);
-            return false;
-          }
-          if (seen.has(r.unique_reading_id)) {
-            console.log('[DataService] Removing duplicate:', r.unique_reading_id);
-            return false;
-          }
-          seen.add(r.unique_reading_id);
-          return true;
-        });
-        
-        console.log('[DataService] Unique readings after cleanup:', uniqueReadings.length);
-        return uniqueReadings;
-      }
-    }
-  } catch (e) {
-    console.warn('[DataService] Could not load from storage:', e);
-  }
-  
-  // No fallback to mock data - only real ESP32 data
-  console.log('[DataService] No stored data, returning empty array');
-  return [];
-}
-
-// --- Initialize MQTT ---
 function initMQTT() {
   if (_mqttInitialized) return;
   _mqttInitialized = true;
@@ -214,6 +304,7 @@ function initMQTT() {
       clean: true,
       connectTimeout: 10000,
       reconnectPeriod: 5000,
+      rejectUnauthorized: false, // For development - use proper certs in production
     });
   } catch (err) {
     console.error('[DataService] MQTT connection error:', err);
@@ -227,25 +318,21 @@ function initMQTT() {
     console.log('[DataService] Subscribed to topic');
   });
   
-  _mqttClient.on('message', (topic, payload) => {
+  _mqttClient.on('message', async (topic, payload) => {
     try {
       const mqttReading: MqttReading = JSON.parse(payload.toString());
       console.log('[DataService] Received MQTT message:', topic, mqttReading);
       
-      // Validate temperature - filter out invalid readings (85°C is a common error code from DS18B20)
       if (mqttReading.temp === 85 || mqttReading.temp < -55 || mqttReading.temp > 125) {
         console.warn('[DataService] Invalid temperature reading filtered:', mqttReading.temp);
         return;
       }
       
-      // Convert to frontend format
       const reading = convertToSensorReading(mqttReading);
       console.log('[DataService] Converted reading:', reading);
       
-      // Update last communication timestamp
       updateLastCommunication();
       
-      // Check if reading already exists (avoid duplicates from ESP32 re-sending)
       const existingIndex = _readings.findIndex(r => r.unique_reading_id === reading.unique_reading_id);
       if (existingIndex >= 0) {
         console.log('[DataService] Reading already exists, updating...');
@@ -253,17 +340,20 @@ function initMQTT() {
       } else {
         console.log('[DataService] Adding new reading:', reading.unique_reading_id);
         _readings.push(reading);
+        
+        await createOrUpdateChamber(
+          reading.device_id,
+          reading.name,
+          getUserId()
+        );
       }
       
-      // Keep only last 1000 readings
       if (_readings.length > MAX_STORED_READINGS) {
         _readings = _readings.slice(-MAX_STORED_READINGS);
       }
       
-      // Save to localStorage for persistence
-      saveToStorage();
+      await saveReadingToDB(reading);
       
-      // Notify listeners
       notifyListeners();
     } catch (err) {
       console.error('[DataService] Error processing MQTT message:', err);
@@ -284,50 +374,41 @@ function initMQTT() {
   }
 }
 
-// --- Notify all listeners ---
 function notifyListeners() {
   _listeners.forEach(fn => fn([..._readings]));
 }
 
-// --- Public API ---
-
-/**
- * Subscribe to sensor readings updates.
- */
 export function onReadingsUpdate(callback: (readings: SensorReading[]) => void): () => void {
   _listeners.push(callback);
   
-  // Immediately call with current data (load if needed)
   if (_readings.length === 0) {
-    _readings = loadFromStorage();
+    loadFromDB().then(dbReadings => {
+      if (dbReadings.length > 0) {
+        _readings = dbReadings;
+        console.log('[onReadingsUpdate] Loaded', _readings.length, 'readings from DB');
+        callback([..._readings]);
+      } else {
+        console.log('[onReadingsUpdate] No readings available yet');
+      }
+    });
   }
   
   if (_readings.length > 0) {
     console.log('[onReadingsUpdate] Sending', _readings.length, 'readings to callback');
     callback([..._readings]);
-  } else {
-    console.log('[onReadingsUpdate] No readings available yet');
   }
   
-  // Return unsubscribe function
   return () => {
     _listeners = _listeners.filter(fn => fn !== callback);
   };
 }
 
-/**
- * Get all sensor readings.
- * Also initializes MQTT connection if not already done.
- */
-export function getReadings(): Promise<SensorReading[]> {
-  // Load from storage if empty
-  if (_readings.length === 0) {
-    _readings = loadFromStorage();
-    console.log('[DataService] Loaded from storage, count:', _readings.length);
-  } else {
-    console.log('[DataService] Using existing in-memory readings, count:', _readings.length);
-  }
+export async function getReadings(forceRefresh = false): Promise<SensorReading[]> {
+  // Always load from database on page load to ensure fresh data
+  _readings = await loadFromDB();
+  console.log('[DataService] Loaded from DB, count:', _readings.length);
   
+  // Initialize MQTT if not connected
   if (!_mqttClient) {
     console.log('[DataService] Initializing MQTT from getReadings...');
     initMQTT();
@@ -335,20 +416,14 @@ export function getReadings(): Promise<SensorReading[]> {
   
   console.log('[DataService] Returning readings:', _readings.length);
   
-  return Promise.resolve(_readings);
+  return _readings;
 }
 
-/**
- * Filter readings by device ID.
- */
 export function filterByChamber(data: SensorReading[], deviceId: string): SensorReading[] {
   if (deviceId === 'ALL') return data;
   return data.filter(d => d.device_id === deviceId);
 }
 
-/**
- * Filter readings to the last N days relative to the most recent reading.
- */
 export function filterByDays(data: SensorReading[], days: number): SensorReading[] {
   if (data.length === 0) return data;
   
@@ -362,9 +437,6 @@ export function filterByDays(data: SensorReading[], days: number): SensorReading
   });
 }
 
-/**
- * Get the earliest and latest dates in a dataset.
- */
 export function getDateBounds(data: SensorReading[]): { min: Date; max: Date } | null {
   if (data.length === 0) return null;
   
@@ -375,16 +447,10 @@ export function getDateBounds(data: SensorReading[]): { min: Date; max: Date } |
   };
 }
 
-/**
- * Get unique device IDs from dataset.
- */
 export function getUniqueDevices(data: SensorReading[]): string[] {
   return [...new Set(data.map(d => d.device_id))];
 }
 
-/**
- * Calculate temperature statistics for a reading set.
- */
 export function calcStats(data: SensorReading[]): { max: number; min: number; avg: number } {
   const temps = data.map(d => d.temp).filter(t => !isNaN(t));
   if (temps.length === 0) {
@@ -397,11 +463,7 @@ export function calcStats(data: SensorReading[]): { max: number; min: number; av
   };
 }
 
-/**
- * Get temperature limits for a specific device from localStorage.
- * Returns default values if not configured.
- */
-export function getDeviceLimits(deviceId: string): { min: number; max: number } {
+export function getDeviceLimitsSync(deviceId: string): { min: number; max: number } {
   const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
   const camera = storedCameras[deviceId];
   
@@ -412,21 +474,51 @@ export function getDeviceLimits(deviceId: string): { min: number; max: number } 
     };
   }
   
-  // Default limits if not configured
   return { min: -25, max: -15 };
 }
 
-/**
- * Check if a reading is within safe limits for a device.
- */
-export function isWithinLimits(temp: number, deviceId: string): boolean {
-  const limits = getDeviceLimits(deviceId);
+export async function getDeviceLimits(deviceId: string): Promise<{ min: number; max: number }> {
+  try {
+    const userId = getUserId();
+    const result = await sql`
+      SELECT temp_min, temp_max
+      FROM chambers
+      WHERE id = ${deviceId} AND (user_id = ${userId} OR user_id IS NULL)
+    `;
+    
+    if (result.length > 0) {
+      return {
+        min: parseFloat(result[0].temp_min) || -25,
+        max: parseFloat(result[0].temp_max) || -15
+      };
+    }
+  } catch (error) {
+    console.warn('[DataService] Could not get device limits from DB:', error);
+  }
+  
+  return getDeviceLimitsSync(deviceId);
+}
+
+export async function saveDeviceLimits(deviceId: string, min: number, max: number): Promise<void> {
+  try {
+    const userId = getUserId();
+    await sql`
+      INSERT INTO chambers (id, name, user_id, temp_min, temp_max)
+      VALUES (${deviceId}, ${deviceId}, ${userId}, ${min}, ${max})
+      ON CONFLICT (id) DO UPDATE SET
+        temp_min = EXCLUDED.temp_min,
+        temp_max = EXCLUDED.temp_max
+    `;
+  } catch (error) {
+    console.warn('[DataService] Could not save device limits:', error);
+  }
+}
+
+export async function isWithinLimits(temp: number, deviceId: string): Promise<boolean> {
+  const limits = await getDeviceLimits(deviceId);
   return temp >= limits.min && temp <= limits.max;
 }
 
-/**
- * Get the latest reading for each device.
- */
 export function getLatestByDevice(data: SensorReading[]): Map<string, SensorReading> {
   const latest = new Map<string, SensorReading>();
   
@@ -446,20 +538,10 @@ export function getLatestByDevice(data: SensorReading[]): Map<string, SensorRead
   return latest;
 }
 
-/**
- * Save last reading to localStorage for persistence across page loads.
- */
-export function saveLastReading(reading: SensorReading) {
-  try {
-    localStorage.setItem('gettemp_last_reading', JSON.stringify(reading));
-  } catch (e) {
-    console.warn('[DataService] Could not save last reading:', e);
-  }
+export async function saveLastReading(reading: SensorReading): Promise<void> {
+  localStorage.setItem('gettemp_last_reading', JSON.stringify(reading));
 }
 
-/**
- * Load last reading from localStorage.
- */
 export function loadLastReading(): SensorReading | null {
   try {
     const stored = localStorage.getItem('gettemp_last_reading');

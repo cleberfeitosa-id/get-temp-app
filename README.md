@@ -43,8 +43,8 @@ O projeto opera atualmente em modo **mock** (dados simulados via JSON estático)
 | Estilização | Tailwind CSS (via CDN) + tokens Material Design 3 |
 | Tipografia | Google Fonts — Space Grotesk + Manrope |
 | Ícones | Material Symbols Outlined |
-| Dados (atual) | JSON estático em `/public/mock/esp32_mock.json` |
-| Dados (futuro) | MQTT via `mqtt` npm package |
+| MQTT | EMQX Cloud (WebSocket TLS wss://...:8084/mqtt) |
+| Database | NeonDB (PostgreSQL serverless) |
 | Testing | Vitest |
 | Hosting | [Vercel](https://vercel.com) (via `vercel.json` + `vite.config.ts`) |
 | Repositório | [GitHub](https://github.com/cleberfeitosa-id/get-temp-app) |
@@ -55,18 +55,21 @@ O projeto opera atualmente em modo **mock** (dados simulados via JSON estático)
 
 ```
 get-temp-app/
-├── public/
-│   ├── mock/
-│   │   └── esp32_mock.json        ← Dados simulados do ESP32
-│   └── mqtt-debug.html           ← Debug de payloads MQTT
 ├── src/
-│   ├── main.ts                    ← Lógica principal / roteamento por página
-│   ├── dataService.ts             ← Abstração de dados (Mock → MQTT-ready)
-│   └── style.css                  ← Estilos globais
+│   ├── main.ts                    ← Servidor HTTP + WebSocket + roteamento
+│   ├── dataService.ts             ← MQTT subscriber + NeonDB queries
+│   ├── mqttService.ts            ← Client MQTT (EMQX Cloud)
+│   ├── authService.ts            ← Autenticação bcrypt + JWT
+│   ├── db.ts                    ← NeonDB client
+│   ├── counter.ts               ← Contador de acessos
+│   └── style.css                ← Estilos globais
+├── public/
+│   └── mock/
+│       └── esp32_mock.json       ← Dados mock para fallback
 ├── test/
-│   └── dataService.test.ts        ← Unit tests com Vitest
-├── index.html                     ← Dashboard de Status
-├── analise.html                   ← Análise Temporal com Filtros
+│   └── dataService.test.ts       ← Unit tests com Vitest
+├── index.html                   ← Dashboard de Status
+├── analise.html                  ← Análise Temporal com Filtros
 ├── relatorios.html                ← Geração e Export de Relatórios
 ├── detalhes_camara.html           ← Detalhe por Câmara (via ?id=CAM01)
 ├── ajustes.html                   ← Configurações, Perfil e Gestão de Câmaras
@@ -200,7 +203,16 @@ get-temp-app/
 - **Melhorias no gráfico de detalhes**: estilo minimalista em tons de cinza, eixo Y com labels, alinhamento correto
 - **Impressão completa**: ao gerar PDF, todos os registros são impressos (não apenas a página atual)
 - **Mock data automático**: fallback de dados quando localStorage está vazio
-- **Integração MQTT**: dados em tempo real do ESP32 via EMQX Cloud
+- **Integração MQTT**: dados em tempo real do ESP32 via EMQX Cloud (porta 8084 WebSocket TLS)
+- **Conexão MQTT corrigida**: porta wss://...:8084/mqtt (não 8884)
+
+### v1.3.0 (Abril 2026)
+
+- **Dashboard sempre carrega dados do banco**: cada acesso查询 NeonDB para dados históricos
+- **GPIO 2 como output**: LED controlado após envio MQTT no ESP32
+- **ESP32 retry de conexão**: 2 tentativas de WiFi + MQTT antes de deepsleep 15min
+- **ESP32 temperatura inválida**: retry após limpar SPIFFS se 85°C
+- **ESP32 envia temp=85°C**: para debug de sensor com problema
 
 ### v1.2.0 (Abril 2026)
 

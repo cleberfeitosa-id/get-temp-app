@@ -9,8 +9,8 @@ import type { SensorReading } from './dataService.ts';
 
 // MQTT Configuration - EMQX Cloud
 export const MQTT_CONFIG = {
-  // EMQX Cloud with TLS WebSocket: wss://r0112411.ala.us-east-1.emqxsl.com:8884/mqtt
-  brokerUrl: '',
+  // EMQX Cloud with TLS WebSocket: wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt
+  brokerUrl: 'wss://r0112411.ala.us-east-1.emqxsl.com:8084/mqtt',
   topic: 'gettemp',  // Topic to subscribe (ESP32 publishes here)
   username: 'gettemp',
   password: 'gettemp123',

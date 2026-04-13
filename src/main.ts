@@ -1,5 +1,6 @@
 import './style.css';
-import { getReadings, filterByChamber, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimits, clearAllReadings, deleteReadingById, saveLastReading, loadLastReading, type SensorReading } from './dataService.ts';
+import { getReadings, filterByChamber, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimitsSync, clearAllReadings, deleteReadingById, saveLastReading, loadLastReading, initDB, type SensorReading } from './dataService.ts';
+import { loginUser, seedAdminUser, getUserChambers } from './authService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -44,6 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.insertAdjacentHTML("afterbegin", HeaderHTML);
 
   const currentPath = window.location.pathname;
+  const searchParams = new URLSearchParams(window.location.search);
 
   // Helper: handles both /page and /page.html (accounts for Vercel cleanUrls)
   const isPage = (name: string) =>
@@ -51,7 +53,10 @@ document.addEventListener("DOMContentLoaded", () => {
     currentPath.endsWith(`/${name}`) ||
     currentPath === `/${name}`;
 
-  if (!isPage('login') && !isPage('visualizacao_relatorio')) {
+  // Navbar should NOT show on: login, visualizacao_relatorio
+  const showNavBar = !isPage('login') && !isPage('visualizacao_relatorio');
+  
+  if (showNavBar) {
       document.body.insertAdjacentHTML("beforeend", NavBarHTML);
   }
 
@@ -78,6 +83,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 0);
   }
 
+  // Initialize database and seed admin user on app load
+  initDB().then(() => seedAdminUser());
+  
   // --- Auth Logic (Login) ---
   if (onLoginPage) {
     const loginForm = document.getElementById('login-form') as HTMLFormElement;
@@ -94,25 +102,26 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (loginForm) {
-      loginForm.addEventListener('submit', (e) => {
+      loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = (document.getElementById('email') as HTMLInputElement).value;
         const pwd = pwdInput.value;
         const remember = (document.getElementById('remember') as HTMLInputElement).checked;
 
-        if (email === 'admin@gettemp.io' && pwd === 'gettemp123') {
-           if (remember) localStorage.setItem('authToken', 'demo-token-123');
-           else sessionStorage.setItem('authToken', 'demo-token-123');
-           localStorage.setItem('authToken', 'demo-token-123');
-           
-           // Generate unique user ID for data association
-           const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-           localStorage.setItem('gettemp_user_id', userId);
-           localStorage.setItem('gettemp_user_email', email);
-           
-           window.location.href = 'index.html';
+        const user = await loginUser(email, pwd);
+        
+        if (user) {
+          if (remember) localStorage.setItem('authToken', 'db-token-' + user.id);
+          else sessionStorage.setItem('authToken', 'db-token-' + user.id);
+          localStorage.setItem('authToken', 'db-token-' + user.id);
+          
+          localStorage.setItem('gettemp_user_id', user.id);
+          localStorage.setItem('gettemp_user_email', user.email);
+          localStorage.setItem('profile_name', user.name || user.email);
+          
+          window.location.href = 'index.html';
         } else {
-           if (errorMsg) errorMsg.classList.remove('hidden');
+          if (errorMsg) errorMsg.classList.remove('hidden');
         }
       });
     }
@@ -415,7 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     // Get configured name and limits
                     const devConfig = storedCameras[deviceId];
                     const devName = devConfig?.name || latest.name || deviceId;
-                    const limits = getDeviceLimits(deviceId);
+                    const limits = getDeviceLimitsSync(deviceId);
                     
                     const isSafe = latest.connection === 'Connected' && latest.temp <= limits.max && latest.temp >= limits.min;
                     const badgeClass = isSafe ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
@@ -472,7 +481,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (tempHeader) tempHeader.textContent = latest.temp.toFixed(1);
           
           // Get device-specific limits
-          const limits = getDeviceLimits(deviceId);
+          const limits = getDeviceLimitsSync(deviceId);
           const storedCameras = JSON.parse(localStorage.getItem('gettemp_cameras') || '{}');
           const devConfig = storedCameras[deviceId];
           
@@ -618,7 +627,7 @@ document.addEventListener("DOMContentLoaded", () => {
             readings.forEach((r: SensorReading, idx: number) => {
               if (r.temp === undefined || r.temp === null || isNaN(r.temp)) return;
               
-              const limits = getDeviceLimits(deviceId);
+              const limits = getDeviceLimitsSync(deviceId);
               const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
               const isOutlier = r.isOutlier === true;
               const status = r.connection === 'Disconnected' ? 'Offline' : (isOutlier ? 'Inválido' : (isOutOfRange ? 'Alerta' : 'Normal'));
@@ -797,7 +806,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           
           // Device-specific limits from camera registration
-          const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+          const deviceLimits = firstDeviceId ? getDeviceLimitsSync(firstDeviceId) : { min: -25, max: -15 };
           
           console.log('[Analise] Device ID:', firstDeviceId);
           console.log('[Analise] Limits:', deviceLimits);
@@ -929,7 +938,7 @@ document.addEventListener("DOMContentLoaded", () => {
             filtered.forEach((r: SensorReading, idx: number) => {
                 if (r.temp === undefined || r.temp === null || isNaN(r.temp)) return;
                 
-                const limits = getDeviceLimits(r.device_id);
+                const limits = getDeviceLimitsSync(r.device_id);
                 const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
                 const isOutlier = r.isOutlier === true;
                 const status = r.connection === 'Disconnected' ? 'Offline' : (isOutlier ? 'Inválido' : (isOutOfRange ? 'Alerta' : 'Normal'));
@@ -1074,7 +1083,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (logContainer) {
               logContainer.innerHTML = '';
               [...filtered].reverse().forEach((r: SensorReading) => {
-                  const limits = getDeviceLimits(r.device_id);
+                  const limits = getDeviceLimitsSync(r.device_id);
                   const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
                   const isAlert = isOutOfRange || r.connection === 'Disconnected';
                   if (!isAlert) return;
@@ -1125,7 +1134,7 @@ document.addEventListener("DOMContentLoaded", () => {
               }).length;
               
               const safeCount = filtered.filter(d => {
-                const limits = getDeviceLimits(d.device_id);
+                const limits = getDeviceLimitsSync(d.device_id);
                 return d.temp >= limits.min && d.temp <= limits.max && d.connection === 'Connected';
               }).length;
               const compliance = filtered.length > 0 ? (safeCount / filtered.length * 100) : 0;
@@ -1162,7 +1171,7 @@ document.addEventListener("DOMContentLoaded", () => {
               
               // Temperature alerts based on device limits
               const firstDeviceId = filtered[0]?.device_id;
-              const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+              const deviceLimits = firstDeviceId ? getDeviceLimitsSync(firstDeviceId) : { min: -25, max: -15 };
               
               if (maxTemp > deviceLimits.max) {
                   insights.push(`⚠ Temperatura máxima acima do limite seguro (${deviceLimits.max}°C).`);
@@ -1684,7 +1693,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Get device-specific limits and filter alerts based on them
       const alerts = data.filter(r => {
-        const limits = getDeviceLimits(r.device_id);
+        const limits = getDeviceLimitsSync(r.device_id);
         const isOutOfRange = r.temp > limits.max || r.temp < limits.min;
         const isOffline = r.connection === 'Disconnected';
         return isOutOfRange || isOffline;
@@ -1714,7 +1723,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         filtered.forEach(r => {
           const isOffline = r.connection === 'Disconnected';
-          const limits = getDeviceLimits(r.device_id);
+          const limits = getDeviceLimitsSync(r.device_id);
           const isAbove = r.temp > limits.max;
           const isBelow = r.temp < limits.min;
           
@@ -1837,7 +1846,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Calculate compliance (within device-specific safe range)
       // Get limits from first device in data (or default)
       const firstDeviceId = data[0]?.device_id;
-      const deviceLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+      const deviceLimits = firstDeviceId ? getDeviceLimitsSync(firstDeviceId) : { min: -25, max: -15 };
       const safeCount = data.filter(d => d.temp >= deviceLimits.min && d.temp <= deviceLimits.max && d.connection === 'Connected').length;
       const compliance = data.length > 0 ? (safeCount / data.length * 100).toFixed(1) : '0';
       
@@ -1941,7 +1950,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Dynamic limits - use device-specific limits from camera registration
         const firstDeviceId = data[0]?.device_id;
-        const chartLimits = firstDeviceId ? getDeviceLimits(firstDeviceId) : { min: -25, max: -15 };
+        const chartLimits = firstDeviceId ? getDeviceLimitsSync(firstDeviceId) : { min: -25, max: -15 };
         const upperLimit = chartLimits.max;
         const lowerLimit = chartLimits.min;
         // Calculate chart range with padding
@@ -2108,7 +2117,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Max/Min insight based on device-specific limits
         const reportDeviceId = data[0]?.device_id;
-        const reportLimits = reportDeviceId ? getDeviceLimits(reportDeviceId) : { min: -25, max: -15 };
+        const reportLimits = reportDeviceId ? getDeviceLimitsSync(reportDeviceId) : { min: -25, max: -15 };
         
         if (max > reportLimits.max) {
             insights.push(`⚠ Temperatura máxima acima do limite seguro (${reportLimits.max}°C). Risco de comprometimento de produtos.`);
@@ -2143,7 +2152,7 @@ document.addEventListener("DOMContentLoaded", () => {
           tbl.innerHTML = pageData.map(d => {
               const devConfig = storedCameras[d.device_id];
               const displayName = devConfig?.name || d.name || d.device_id;
-              const limits = getDeviceLimits(d.device_id);
+              const limits = getDeviceLimitsSync(d.device_id);
               const isOutOfRange = d.temp > limits.max || d.temp < limits.min;
               const isWarning = d.connection !== 'Connected' || isOutOfRange;
               const statusClass = isWarning ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
@@ -2199,7 +2208,7 @@ document.addEventListener("DOMContentLoaded", () => {
               tbl.innerHTML = [...data].reverse().map(d => {
                   const devConfig = storedCameras[d.device_id];
                   const displayName = devConfig?.name || d.name || d.device_id;
-                  const limits = getDeviceLimits(d.device_id);
+                  const limits = getDeviceLimitsSync(d.device_id);
                   const isOutOfRange = d.temp > limits.max || d.temp < limits.min;
                   const isWarning = d.connection !== 'Connected' || isOutOfRange;
                   const statusClass = isWarning ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
@@ -2601,9 +2610,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      btnConfirmReset.addEventListener('click', () => {
+      btnConfirmReset.addEventListener('click', async () => {
         // Clear readings from dataService
-        clearAllReadings();
+        await clearAllReadings();
         
         addOperationLog('RESET', 'Todas as leituras históricas foram removidas');
         
@@ -2635,7 +2644,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      btnConfirmDelete.addEventListener('click', () => {
+      btnConfirmDelete.addEventListener('click', async () => {
         const readingId = (document.getElementById('delete-reading-id') as HTMLInputElement).value.trim();
         if (!readingId) {
           alert('Por favor, informe o ID da leitura.');
@@ -2643,7 +2652,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Delete the reading using dataService
-        const deleted = deleteReadingById(readingId);
+        const deleted = await deleteReadingById(readingId);
         if (deleted) {
           addOperationLog('EXCLUSÃO', `Leitura removida: ${readingId}`);
           
