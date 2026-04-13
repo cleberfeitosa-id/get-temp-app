@@ -1,6 +1,6 @@
 import './style.css';
 import { getReadings, filterByChamber, getDateBounds, getUniqueDevices, calcStats, onReadingsUpdate, getDeviceLimitsSync, clearAllReadings, deleteReadingById, saveLastReading, loadLastReading, initDB, type SensorReading } from './dataService.ts';
-import { loginUser, seedAdminUser, getUserChambers } from './authService.ts';
+import { loginUser, registerUser, seedAdminUser, getUserChambers } from './authService.ts';
 
 // Shared Header Component
 const HeaderHTML = `
@@ -125,6 +125,90 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     }
+
+    // Modal: Criar Conta
+    const registerLink = document.getElementById('register-link');
+    const registerModal = document.getElementById('register-modal');
+    const registerBackdrop = document.getElementById('register-backdrop');
+    const closeRegister = document.getElementById('close-register');
+    const registerForm = document.getElementById('register-form') as HTMLFormElement;
+    const registerError = document.getElementById('register-error');
+    const registerSuccess = document.getElementById('register-success');
+
+    registerLink?.addEventListener('click', (e) => {
+      e.preventDefault();
+      registerModal?.classList.remove('hidden');
+    });
+
+    closeRegister?.addEventListener('click', () => registerModal?.classList.add('hidden'));
+    registerBackdrop?.addEventListener('click', () => registerModal?.classList.add('hidden'));
+
+    registerForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('reg-name') as HTMLInputElement).value;
+      const email = (document.getElementById('reg-email') as HTMLInputElement).value;
+      const password = (document.getElementById('reg-password') as HTMLInputElement).value;
+      const confirm = (document.getElementById('reg-confirm') as HTMLInputElement).value;
+
+      registerError?.classList.add('hidden');
+      registerSuccess?.classList.add('hidden');
+
+      if (password !== confirm) {
+        registerError!.textContent = 'As senhas não coincidem.';
+        registerError?.classList.remove('hidden');
+        return;
+      }
+
+      if (password.length < 6) {
+        registerError!.textContent = 'Senha deve ter pelo menos 6 caracteres.';
+        registerError?.classList.remove('hidden');
+        return;
+      }
+
+      const user = await registerUser(email, password, name);
+      if (user) {
+        registerSuccess!.textContent = 'Conta criada com sucesso! Você pode fazer login.';
+        registerSuccess?.classList.remove('hidden');
+        registerForm.reset();
+        setTimeout(() => {
+          registerModal?.classList.add('hidden');
+          registerSuccess?.classList.add('hidden');
+        }, 2500);
+      } else {
+        registerError!.textContent = 'E-mail já cadastrado ou erro ao criar conta.';
+        registerError?.classList.remove('hidden');
+      }
+    });
+
+    // Modal: Esqueceu Senha
+    const forgotLink = document.getElementById('forgot-password-link');
+    const forgotModal = document.getElementById('forgot-modal');
+    const forgotBackdrop = document.getElementById('forgot-backdrop');
+    const closeForgot = document.getElementById('close-forgot');
+    const forgotForm = document.getElementById('forgot-form') as HTMLFormElement;
+    const forgotError = document.getElementById('forgot-error');
+    const forgotSuccess = document.getElementById('forgot-success');
+
+    forgotLink?.addEventListener('click', (e) => {
+      e.preventDefault();
+      forgotModal?.classList.remove('hidden');
+    });
+
+    closeForgot?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
+    forgotBackdrop?.addEventListener('click', () => forgotModal?.classList.add('hidden'));
+
+    forgotForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (document.getElementById('forgot-email') as HTMLInputElement).value;
+
+      forgotError?.classList.add('hidden');
+      forgotSuccess?.classList.add('hidden');
+
+      // Simular envio (em produção, enviaria email com token)
+      forgotSuccess!.textContent = `Link de recuperação enviado para ${email}. Verifique sua caixa de spam.`;
+      forgotSuccess?.classList.remove('hidden');
+      forgotForm.reset();
+    });
   }
 
   // Change Header icon to back arrow if not on index
@@ -761,29 +845,40 @@ document.addEventListener("DOMContentLoaded", () => {
           const now = new Date();
           const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
           
+          console.log('[renderAnalytics] globalData:', globalData.slice(0, 3));
+          
           // Filter data to last 24 hours minimum
           let filtered = globalData.filter(r => {
-              const readingTime = new Date(`${r.date}T${r.time}`);
-              return readingTime >= oneDayAgo;
+              if (!r.date || !r.time) return false;
+              try {
+                  const readingTime = new Date(`${r.date}T${r.time}`);
+                  return readingTime >= oneDayAgo;
+              } catch {
+                  return false;
+              }
           });
           
-          // Apply chamber filter
-          filtered = filterByChamber(filtered, currentChamber);
-          
           // If no data in 24h, use whatever we have
-          if (filtered.length === 0) filtered = globalData.slice(-20);
+          if (filtered.length === 0) {
+              filtered = globalData.slice(-20).filter(r => r.temp != null && !isNaN(r.temp));
+          }
           
           // Filter out invalid readings (no temp or invalid temp)
           filtered = filtered.filter(r => r.temp !== undefined && r.temp !== null && !isNaN(r.temp));
           
           // Sort by time
           filtered.sort((a, b) => {
-              const timeA = new Date(`${a.date}T${a.time}`).getTime();
-              const timeB = new Date(`${b.date}T${b.time}`).getTime();
-              return timeA - timeB;
+              try {
+                  const timeA = new Date(`${a.date}T${a.time}`).getTime();
+                  const timeB = new Date(`${b.date}T${b.time}`).getTime();
+                  return timeA - timeB;
+              } catch {
+                  return 0;
+              }
           });
 
           console.log('[renderAnalytics] filtered length after cleanup:', filtered.length);
+          console.log('[renderAnalytics] sample reading:', filtered[0]);
           
           // Get device config for tooltip (use first device in filtered data)
           const firstDeviceId = filtered[0]?.device_id;

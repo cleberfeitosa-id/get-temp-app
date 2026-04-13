@@ -156,10 +156,11 @@ export async function createOrUpdateChamber(
   tempMin?: number,
   tempMax?: number
 ): Promise<boolean> {
+  const safeUserId = (userId && userId !== 'anonymous') ? userId : null;
   try {
     await sql`
       INSERT INTO chambers (id, name, user_id, temp_min, temp_max)
-      VALUES (${deviceId}, ${name}, ${userId}, ${tempMin ?? -25}, ${tempMax ?? -15})
+      VALUES (${deviceId}, ${name}, ${safeUserId}, ${tempMin ?? -25}, ${tempMax ?? -15})
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         temp_min = COALESCE(EXCLUDED.temp_min, chambers.temp_min),

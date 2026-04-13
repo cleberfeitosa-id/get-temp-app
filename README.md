@@ -208,11 +208,15 @@ get-temp-app/
 
 ### v1.3.0 (Abril 2026)
 
-- **Dashboard sempre carrega dados do banco**: cada acesso查询 NeonDB para dados históricos
+- **Dashboard sempre carrega dados do banco**: cada acesso query NeonDB para dados históricos
 - **GPIO 2 como output**: LED controlado após envio MQTT no ESP32
-- **ESP32 retry de conexão**: 2 tentativas de WiFi + MQTT antes de deepsleep 15min
+- **ESP32 retry de conexão**: 20 tentativas de WiFi + MQTT antes de deepsleep 15min
 - **ESP32 temperatura inválida**: retry após limpar SPIFFS se 85°C
 - **ESP32 envia temp=85°C**: para debug de sensor com problema
+- **Filtro de dados inválidos**: temperatures null, 85°C, >125°C filtradas na query SQL
+- **Correção carga de dados**: todas as telas (dashboard, análise, relatórios) agora carregam do banco
+- **Cadastro de novos usuários**: modal na tela de login
+- **Recuperação de senha**: modal na tela de login (simulado)
 
 ### v1.2.0 (Abril 2026)
 

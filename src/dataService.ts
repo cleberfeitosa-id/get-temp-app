@@ -159,35 +159,45 @@ async function loadFromDB(): Promise<SensorReading[]> {
     const userId = getUserId();
     const isValidUUID = userId && userId !== 'anonymous' && /^[0-9a-f-]{36}$/i.test(userId);
     
+    console.log('[loadFromDB] userId:', userId, 'isValidUUID:', isValidUUID);
+    
     let result;
     if (isValidUUID) {
       result = await sql`
         SELECT 
           r.unique_reading_id, r.device_id, r.name, r.device_ip,
           r.temp, r.spiffs_usage, r.wifi_rssi, r.free_heap, r.uptime,
-          r.date, r.time, r.connection
+          r.date, r.time, r.connection,
+          r.reading_timestamp
         FROM readings r
-        LEFT JOIN chambers c ON r.device_id = c.id
-        WHERE c.user_id IS NULL OR c.user_id = ${userId}
+        WHERE r.temp IS NOT NULL 
+        AND r.temp::text != ''
+        AND r.temp::numeric > -55 
+        AND r.temp::numeric < 125
+        AND r.temp::numeric != 85
         ORDER BY r.reading_timestamp DESC
-        LIMIT ${MAX_STORED_READINGS}
+        LIMIT 1000
       `;
     } else {
       result = await sql`
         SELECT 
           r.unique_reading_id, r.device_id, r.name, r.device_ip,
           r.temp, r.spiffs_usage, r.wifi_rssi, r.free_heap, r.uptime,
-          r.date, r.time, r.connection
+          r.date, r.time, r.connection,
+          r.reading_timestamp
         FROM readings r
-        LEFT JOIN chambers c ON r.device_id = c.id
-        WHERE c.user_id IS NULL
+        WHERE r.temp IS NOT NULL 
+        AND r.temp::text != ''
+        AND r.temp::numeric > -55 
+        AND r.temp::numeric < 125
+        AND r.temp::numeric != 85
         ORDER BY r.reading_timestamp DESC
-        LIMIT ${MAX_STORED_READINGS}
+        LIMIT 1000
       `;
     }
     
     if (result && result.length > 0) {
-      console.log('[DataService] Loaded', result.length, 'readings from database');
+      console.log('[DataService] Loaded', result.length, 'valid readings from database');
       return result.map((row: any) => ({
         name: row.name,
         unique_reading_id: row.unique_reading_id,

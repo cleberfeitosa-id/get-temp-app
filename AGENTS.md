@@ -45,3 +45,5 @@ npm run test    # Test
 - `getReadings()` sempre carrega do banco, não do cache em memória
 - MQTT porta correta: 8084 (não 8884)
 - MQTT usa rejectUnauthorized: false (dev)
+- Filtro SQL para temp inválidas (null, 85°C, >125°C, <-55°C)
+- Modal de registro e recuperação de senha no login

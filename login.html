@@ -165,13 +165,12 @@
 </form>
 <!-- Help Links -->
 <div class="mt-8 pt-8 border-t border-outline-variant/30 flex flex-col items-center gap-4 mt-10 pt-10">
-<a class="text-sm font-medium text-primary hover:text-on-primary-fixed-variant transition-colors" href="#">
+<a class="text-sm font-medium text-primary hover:text-on-primary-fixed-variant transition-colors" href="#" id="forgot-password-link">
                         Esqueceu sua senha?
                     </a>
-<div class="flex items-center gap-4">
-<a class="text-xs text-on-surface-variant hover:underline" href="#">Central de Suporte</a>
-<span class="w-1 h-1 bg-outline-variant rounded-full"></span>
-<a class="text-xs text-on-surface-variant hover:underline" href="#">Política de Privacidade</a>
+<div class="flex items-center gap-2">
+<span class="text-xs text-on-surface-variant">Não tem conta?</span>
+<a class="text-xs font-medium text-primary hover:underline" href="#" id="register-link">Criar Conta</a>
 </div>
 </div>
 </div>
@@ -182,6 +181,66 @@
 <span class="text-[10px] font-bold tracking-[0.2em] uppercase">Criptografia de Nível Empresarial</span>
 </div>
 </main>
+
+<!-- Modal: Criar Conta -->
+<div id="register-modal" class="fixed inset-0 z-50 hidden">
+<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="register-backdrop"></div>
+<div class="relative z-10 flex items-center justify-center min-h-screen p-4">
+<div class="bg-surface-container-high rounded-3xl shadow-2xl w-full max-w-md p-8 transform transition-all">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline text-xl font-semibold text-on-surface">Criar Nova Conta</h3>
+<button id="close-register" class="text-on-surface-variant hover:text-on-surface p-2">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<form id="register-form" class="space-y-6">
+<div>
+<input class="w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT" id="reg-name" placeholder="Nome completo" required type="text"/>
+</div>
+<div>
+<input class="w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT" id="reg-email" placeholder="E-mail" required type="email"/>
+</div>
+<div>
+<input class="w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT" id="reg-password" placeholder="Senha (mín. 6 caracteres)" required type="password" minlength="6"/>
+</div>
+<div>
+<input class="w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT" id="reg-confirm" placeholder="Confirmar senha" required type="password"/>
+</div>
+<div id="register-error" class="hidden text-sm text-error font-semibold py-2 px-4 bg-error-container rounded-xl"></div>
+<div id="register-success" class="hidden text-sm text-success font-semibold py-2 px-4 bg-success-container rounded-xl"></div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-full font-headline font-bold text-lg shadow-lg shadow-primary/25 hover:opacity-90 active:scale-[0.98] transition-all" type="submit">
+Criar Conta
+</button>
+</form>
+</div>
+</div>
+</div>
+
+<!-- Modal: Esqueceu Senha -->
+<div id="forgot-modal" class="fixed inset-0 z-50 hidden">
+<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="forgot-backdrop"></div>
+<div class="relative z-10 flex items-center justify-center min-h-screen p-4">
+<div class="bg-surface-container-high rounded-3xl shadow-2xl w-full max-w-md p-8 transform transition-all">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline text-xl font-semibold text-on-surface">Recuperar Senha</h3>
+<button id="close-forgot" class="text-on-surface-variant hover:text-on-surface p-2">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<form id="forgot-form" class="space-y-6">
+<p class="text-on-surface-variant text-sm">Digite seu e-mail e enviaremos um link para redefinir sua senha.</p>
+<div>
+<input class="w-full px-4 py-4 text-on-surface bg-surface-container-low border-0 rounded-DEFAULT" id="forgot-email" placeholder="E-mail cadastrado" required type="email"/>
+</div>
+<div id="forgot-error" class="hidden text-sm text-error font-semibold py-2 px-4 bg-error-container rounded-xl"></div>
+<div id="forgot-success" class="hidden text-sm text-success font-semibold py-2 px-4 bg-success-container rounded-xl"></div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-full font-headline font-bold text-lg shadow-lg shadow-primary/25 hover:opacity-90 active:scale-[0.98] transition-all" type="submit">
+Enviar Link de Recuperação
+</button>
+</form>
+</div>
+</div>
+</div>
 <!-- Visual Element: Temperature Detail (Contextual background element) -->
 <div class="fixed bottom-12 -left-12 opacity-5 pointer-events-none hidden lg:block">
 <span class="font-headline font-bold text-[18rem] leading-none text-primary">-18°</span>
